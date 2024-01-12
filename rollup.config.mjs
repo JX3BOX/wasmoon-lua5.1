@@ -31,7 +31,7 @@ export default {
             outputToFilesystem: true,
         }),
         copy({
-            targets: [{ src: 'build/glue.wasm', dest: 'dist' }],
+            targets: [{ src: 'build/lua.wasm', dest: 'dist' }],
         }),
     ],
 }

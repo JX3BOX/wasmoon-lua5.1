@@ -18,29 +18,29 @@ class UserdataTypeExtension extends TypeExtension<any, UserdataDecorationOptions
     public constructor(thread: Global) {
         super(thread, 'js_userdata')
 
-        this.gcPointer = thread.lua.module.addFunction((functionStateAddress: LuaState) => {
+        this.gcPointer = thread.luaApi.module.addFunction((functionStateAddress: LuaState) => {
             // Throws a lua error which does a jump if it does not match.
-            const userDataPointer = thread.lua.luaL_checkudata(functionStateAddress, 1, this.name)
-            const referencePointer = thread.lua.module.getValue(userDataPointer, '*')
-            thread.lua.unref(referencePointer)
+            const userDataPointer = thread.luaApi.luaL_checkudata(functionStateAddress, 1, this.name)
+            const referencePointer = thread.luaApi.module.getValue(userDataPointer, '*')
+            thread.luaApi.unref(referencePointer)
 
             return LuaReturn.Ok
         }, 'ii')
 
-        if (thread.lua.luaL_newmetatable(thread.address, this.name)) {
-            const metatableIndex = thread.lua.lua_gettop(thread.address)
+        if (thread.luaApi.luaL_newmetatable(thread.address, this.name)) {
+            const metatableIndex = thread.luaApi.lua_gettop(thread.address)
 
             // Mark it as uneditable
-            thread.lua.lua_pushstring(thread.address, 'protected metatable')
-            thread.lua.lua_setfield(thread.address, metatableIndex, '__metatable')
+            thread.luaApi.lua_pushstring(thread.address, 'protected metatable')
+            thread.luaApi.lua_setfield(thread.address, metatableIndex, '__metatable')
 
             // Add the gc function
-            thread.lua.lua_pushcclosure(thread.address, this.gcPointer, 0)
-            thread.lua.lua_setfield(thread.address, metatableIndex, '__gc')
+            thread.luaApi.lua_pushcclosure(thread.address, this.gcPointer, 0)
+            thread.luaApi.lua_setfield(thread.address, metatableIndex, '__gc')
         }
 
         // Pop the metatable from the stack.
-        thread.lua.lua_pop(thread.address, 1)
+        thread.luaApi.lua_pop(thread.address, 1)
     }
 
     public isType(_thread: Thread, _index: number, type: LuaType, name?: string): boolean {
@@ -48,9 +48,9 @@ class UserdataTypeExtension extends TypeExtension<any, UserdataDecorationOptions
     }
 
     public getValue(thread: Thread, index: number): any {
-        const refUserdata = thread.lua.lua_touserdata(thread.address, index)
-        const referencePointer = thread.lua.module.getValue(refUserdata, '*')
-        return thread.lua.getRef(referencePointer)
+        const refUserdata = thread.luaApi.lua_touserdata(thread.address, index)
+        const referencePointer = thread.luaApi.module.getValue(refUserdata, '*')
+        return thread.luaApi.getRef(referencePointer)
     }
 
     public pushValue(thread: Thread, decoratedValue: Decoration<any, UserdataDecorationOptions>): boolean {
@@ -62,7 +62,7 @@ class UserdataTypeExtension extends TypeExtension<any, UserdataDecorationOptions
     }
 
     public close(): void {
-        this.thread.lua.module.removeFunction(this.gcPointer)
+        this.thread.luaApi.module.removeFunction(this.gcPointer)
     }
 }
 

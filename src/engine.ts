@@ -7,13 +7,13 @@ import createPromiseType from './type-extensions/promise'
 import createProxyType from './type-extensions/proxy'
 import createTableType from './type-extensions/table'
 import createUserdataType from './type-extensions/userdata'
-import type LuaWasm from './luawasm'
+import type LuaApi from './lua-api'
 
 export default class LuaEngine {
     public global: Global
 
     public constructor(
-        private cmodule: LuaWasm,
+        private cmodule: LuaApi,
         {
             openStandardLibs = true,
             injectObjects = false,

@@ -76,12 +76,13 @@ async function main() {
             input: process.stdin,
             output: process.stdout,
             terminal: true,
-            removeHistoryDuplicates: true
+            removeHistoryDuplicates: true,
         })
 
         rl.prompt()
 
         for await (const line of rl) {
+            console.log('line', line)
             const loaded = loadcode(line) || loadcode(`return ${line}`)
             if (!loaded) {
                 console.log(lua.global.getValue(-1, LuaType.String))
@@ -89,10 +90,11 @@ async function main() {
                 continue
             }
 
-            const result = luamodule.lua_pcallk(lua.global.address, 0, LUA_MULTRET, 0, 0, null)
+            const result = luamodule.lua_pcall(lua.global.address, 0, LUA_MULTRET, 0, 0, null)
+            lua.global.dumpStack()
             if (result === LuaReturn.Ok) {
-                const returnValues = Array.from({ length: lua.global.getTop() })
-                    .map((_, i) => lua.global.indexToString(i + 1))
+                const top = lua.global.getTop()
+                const returnValues = Array.from({ length: top }).map((_, i) => lua.global.indexToString(i + 1))
 
                 if (returnValues.length) {
                     console.log(...returnValues)
@@ -109,7 +111,7 @@ async function main() {
     }
 }
 
-main().catch(err => {
+main().catch((err) => {
     console.error(err)
     process.exit(1)
 })

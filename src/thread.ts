@@ -13,7 +13,7 @@ import {
 import { Pointer } from './pointer'
 import LuaTypeExtension from './type-extension'
 import MultiReturn from './multireturn'
-import type LuaWasm from './luawasm'
+import type LuaApi from './lua-api'
 
 export interface OrderedExtension {
     // Bigger is more important
@@ -26,78 +26,26 @@ const INSTRUCTION_HOOK_COUNT = 1000
 
 export default class Thread {
     public readonly address: LuaState
-    public readonly lua: LuaWasm
+    public readonly luaApi: LuaApi
     protected readonly typeExtensions: OrderedExtension[]
     private closed = false
     private hookFunctionPointer: number | undefined
     private timeout?: number
     private readonly parent?: Thread
 
-    public constructor(lua: LuaWasm, typeExtensions: OrderedExtension[], address: number, parent?: Thread) {
-        this.lua = lua
+    public constructor(luaApi: LuaApi, typeExtensions: OrderedExtension[], address: LuaState, parent?: Thread) {
+        this.luaApi = luaApi
         this.typeExtensions = typeExtensions
         this.address = address
         this.parent = parent
     }
 
     public newThread(): Thread {
-        const address = this.lua.lua_newthread(this.address)
+        const address = this.luaApi.lua_newthread(this.address)
         if (!address) {
             throw new Error('lua_newthread returned a null pointer')
         }
-        return new Thread(this.lua, this.typeExtensions, address, this.parent || this)
-    }
-
-    public resetThread(): void {
-        this.assertOk(this.lua.lua_resetthread(this.address))
-    }
-
-    public loadString(luaCode: string, name?: string): void {
-        const size = this.lua.module.lengthBytesUTF8(luaCode)
-        const pointerSize = size + 1
-        const bufferPointer = this.lua.module._malloc(pointerSize)
-        try {
-            this.lua.module.stringToUTF8(luaCode, bufferPointer, pointerSize)
-            this.assertOk(this.lua.luaL_loadbufferx(this.address, bufferPointer, size, name ?? bufferPointer, null))
-        } finally {
-            this.lua.module._free(bufferPointer)
-        }
-    }
-
-    public loadFile(filename: string): void {
-        this.assertOk(this.lua.luaL_loadfilex(this.address, filename, null))
-    }
-
-    public resume(argCount = 0): LuaResumeResult {
-        const dataPointer = this.lua.module._malloc(PointerSize)
-        try {
-            this.lua.module.setValue(dataPointer, 0, 'i32')
-            const luaResult = this.lua.lua_resume(this.address, null, argCount, dataPointer)
-            return {
-                result: luaResult,
-                resultCount: this.lua.module.getValue(dataPointer, 'i32'),
-            }
-        } finally {
-            this.lua.module._free(dataPointer)
-        }
-    }
-
-    public getTop(): number {
-        return this.lua.lua_gettop(this.address)
-    }
-
-    public setTop(index: number): void {
-        this.lua.lua_settop(this.address, index)
-    }
-
-    public remove(index: number): void {
-        return this.lua.lua_remove(this.address, index)
-    }
-
-    public setField(index: number, name: string, value: unknown): void {
-        index = this.lua.lua_absindex(this.address, index)
-        this.pushValue(value)
-        this.lua.lua_setfield(this.address, index, name)
+        return new Thread(this.luaApi, this.typeExtensions, address, this.parent || this)
     }
 
     public async run(argCount = 0, options?: Partial<LuaThreadRunOptions>): Promise<MultiReturn> {
@@ -146,16 +94,12 @@ export default class Thread {
 
     public runSync(argCount = 0): MultiReturn {
         const base = this.getTop() - argCount - 1 // The 1 is for the function to run
-        this.assertOk(this.lua.lua_pcallk(this.address, argCount, LUA_MULTRET, 0, 0, null) as LuaReturn)
+        this.assertOk(this.luaApi.lua_pcall(this.address, argCount, LUA_MULTRET, 0) as LuaReturn)
         return this.getStackValues(base)
     }
 
-    public pop(count = 1): void {
-        this.lua.lua_pop(this.address, count)
-    }
-
     public call(name: string, ...args: any[]): MultiReturn {
-        const type = this.lua.lua_getglobal(this.address, name)
+        const type = this.luaApi.lua_getglobal(this.address, name)
         if (type !== LuaType.Function) {
             throw new Error(`A function of type '${type}' was pushed, expected is ${LuaType.Function}`)
         }
@@ -165,23 +109,80 @@ export default class Thread {
         }
 
         const base = this.getTop() - args.length - 1 // The 1 is for the function to run
-        this.lua.lua_callk(this.address, args.length, LUA_MULTRET, 0, null)
+        this.luaApi.lua_call(this.address, args.length, LUA_MULTRET)
         return this.getStackValues(base)
     }
 
-    public getStackValues(start = 0): MultiReturn {
-        const returns = this.getTop() - start
-        const returnValues = new MultiReturn(returns)
-
-        for (let i = 0; i < returns; i++) {
-            returnValues[i] = this.getValue(start + i + 1)
-        }
-
-        return returnValues
+    public isClosed(): boolean {
+        return !this.address || this.closed || Boolean(this.parent?.isClosed())
     }
 
-    public stateToThread(L: LuaState): Thread {
-        return L === this.parent?.address ? this.parent : new Thread(this.lua, this.typeExtensions, L, this.parent || this)
+    public close(): void {
+        if (this.isClosed()) {
+            return
+        }
+
+        if (this.hookFunctionPointer) {
+            this.luaApi.module.removeFunction(this.hookFunctionPointer)
+        }
+
+        this.closed = true
+    }
+
+    public resetThread(): void {
+        this.luaApi.lua_close(this.address)
+    }
+
+    public resume(argCount = 0): LuaResumeResult {
+        // TODO: lua5.1 和 lua5.4 的协程相关机制有点变化 没看懂 到时候再改
+        const dataPointer = this.luaApi.module._malloc(PointerSize)
+        try {
+            this.luaApi.module.setValue(dataPointer, 0, 'i32')
+            const luaResult = this.luaApi.lua_resume(this.address, argCount)
+            return {
+                result: luaResult,
+                resultCount: this.luaApi.module.getValue(dataPointer, 'i32'),
+            }
+        } finally {
+            this.luaApi.module._free(dataPointer)
+        }
+    }
+
+    // Set to > 0 to enable, otherwise disable.
+    public setTimeout(timeout: number | undefined): void {
+        if (timeout && timeout > 0) {
+            if (!this.hookFunctionPointer) {
+                this.hookFunctionPointer = this.luaApi.module.addFunction((): void => {
+                    if (Date.now() > timeout) {
+                        this.pushValue(new LuaTimeoutError(`thread timeout exceeded`))
+                        this.luaApi.lua_error(this.address)
+                    }
+                }, 'vii')
+            }
+
+            this.luaApi.lua_sethook(this.address, this.hookFunctionPointer, LuaEventMasks.Count, INSTRUCTION_HOOK_COUNT)
+            this.timeout = timeout
+        } else if (this.hookFunctionPointer) {
+            this.hookFunctionPointer = undefined
+            this.timeout = undefined
+            this.luaApi.lua_sethook(this.address, null, 0, 0)
+        }
+    }
+
+    public getTimeout(): number | undefined {
+        return this.timeout
+    }
+
+    public getTop(): number {
+        return this.luaApi.lua_gettop(this.address)
+    }
+
+    public setTop(index: number): void {
+        this.luaApi.lua_settop(this.address, index)
+    }
+
+    public remove(index: number): void {
+        return this.luaApi.lua_remove(this.address, index)
     }
 
     public pushValue(rawValue: unknown, userdata?: unknown): void {
@@ -189,9 +190,9 @@ export default class Thread {
         const target = decoratedValue.target
 
         if (target instanceof Thread) {
-            const isMain = this.lua.lua_pushthread(target.address) === 1
+            const isMain = this.luaApi.lua_pushthread(target.address) === 1
             if (!isMain) {
-                this.lua.lua_xmove(target.address, this.address, 1)
+                this.luaApi.lua_xmove(target.address, this.address, 1)
             }
             return
         }
@@ -201,20 +202,20 @@ export default class Thread {
         // Handle primitive types
         switch (typeof target) {
             case 'undefined':
-                this.lua.lua_pushnil(this.address)
+                this.luaApi.lua_pushnil(this.address)
                 break
             case 'number':
                 if (Number.isInteger(target)) {
-                    this.lua.lua_pushinteger(this.address, BigInt(target))
+                    this.luaApi.lua_pushinteger(this.address, target)
                 } else {
-                    this.lua.lua_pushnumber(this.address, target)
+                    this.luaApi.lua_pushnumber(this.address, target)
                 }
                 break
             case 'string':
-                this.lua.lua_pushstring(this.address, target)
+                this.luaApi.lua_pushstring(this.address, target)
                 break
             case 'boolean':
-                this.lua.lua_pushboolean(this.address, target ? 1 : 0)
+                this.luaApi.lua_pushboolean(this.address, target ? 1 : 0)
                 break
             default:
                 if (!this.typeExtensions.find((wrapper) => wrapper.extension.pushValue(this, decoratedValue, userdata))) {
@@ -231,56 +232,23 @@ export default class Thread {
         }
     }
 
-    public setMetatable(index: number, metatable: Record<any, any>): void {
-        index = this.lua.lua_absindex(this.address, index)
-
-        if (this.lua.lua_getmetatable(this.address, index)) {
-            this.pop(1)
-            const name = this.getMetatableName(index)
-            throw new Error(`data already has associated metatable: ${name || 'unknown name'}`)
-        }
-
-        this.pushValue(metatable)
-        this.lua.lua_setmetatable(this.address, index)
-    }
-
-    public getMetatableName(index: number): string | undefined {
-        const metatableNameType = this.lua.luaL_getmetafield(this.address, index, '__name')
-        if (metatableNameType === LuaType.Nil) {
-            return undefined
-        }
-
-        if (metatableNameType !== LuaType.String) {
-            // Pop the metafield if it's not a string
-            this.pop(1)
-            return undefined
-        }
-
-        const name = this.lua.lua_tolstring(this.address, -1, null)
-        // This is popping the luaL_getmetafield result which only pushes with type is not nil.
-        this.pop(1)
-
-        return name
-    }
-
     public getValue(index: number, inputType?: LuaType, userdata?: unknown): any {
-        index = this.lua.lua_absindex(this.address, index)
+        index = this.luaApi.lua_absindex(this.address, index)
 
-        const type: LuaType = inputType ?? this.lua.lua_type(this.address, index)
-
+        const type: LuaType = inputType ?? this.luaApi.lua_type(this.address, index)
         switch (type) {
             case LuaType.None:
                 return undefined
             case LuaType.Nil:
                 return null
             case LuaType.Number:
-                return this.lua.lua_tonumberx(this.address, index, null)
+                return this.luaApi.lua_tonumber(this.address, index)
             case LuaType.String:
-                return this.lua.lua_tolstring(this.address, index, null)
+                return this.luaApi.lua_tolstring(this.address, index, null)
             case LuaType.Boolean:
-                return Boolean(this.lua.lua_toboolean(this.address, index))
+                return Boolean(this.luaApi.lua_toboolean(this.address, index))
             case LuaType.Thread:
-                return this.stateToThread(this.lua.lua_tothread(this.address, index))
+                return this.stateToThread(this.luaApi.lua_tothread(this.address, index))
             default: {
                 let metatableName: string | undefined
                 if (type === LuaType.Table || type === LuaType.Userdata) {
@@ -295,76 +263,79 @@ export default class Thread {
                 }
 
                 // Fallthrough if unrecognised user data
-                console.warn(`The type '${this.lua.lua_typename(this.address, type)}' returned is not supported on JS`)
-                return new Pointer(this.lua.lua_topointer(this.address, index))
+                console.warn(`The type '${this.luaApi.lua_typename(this.address, type)}' returned is not supported on JS`)
+                return new Pointer(this.luaApi.lua_topointer(this.address, index))
             }
         }
     }
 
-    public close(): void {
-        if (this.isClosed()) {
-            return
+    public pop(count = 1): void {
+        this.luaApi.lua_pop(this.address, count)
+    }
+
+    public stateToThread(L: LuaState): Thread {
+        return L === this.parent?.address ? this.parent : new Thread(this.luaApi, this.typeExtensions, L, this.parent || this)
+    }
+
+    public setMetatable(index: number, metatable: Record<any, any>): void {
+        index = this.luaApi.lua_absindex(this.address, index)
+
+        if (this.luaApi.lua_getmetatable(this.address, index)) {
+            this.pop(1)
+            const name = this.getMetatableName(index)
+            throw new Error(`data already has associated metatable: ${name || 'unknown name'}`)
         }
 
-        if (this.hookFunctionPointer) {
-            this.lua.module.removeFunction(this.hookFunctionPointer)
+        this.pushValue(metatable)
+        this.luaApi.lua_setmetatable(this.address, index)
+    }
+
+    public getMetatableName(index: number): string | undefined {
+        const metatableNameType = this.luaApi.luaL_getmetafield(this.address, index, '__name')
+        if (metatableNameType === LuaType.Nil) {
+            return undefined
         }
 
-        this.closed = true
+        if (metatableNameType !== LuaType.String) {
+            // Pop the metafield if it's not a string
+            this.pop(1)
+            return undefined
+        }
+
+        const name = this.luaApi.lua_tolstring(this.address, -1, null)
+        // This is popping the luaL_getmetafield result which only pushes with type is not nil.
+        this.pop(1)
+
+        return name
     }
 
-    // Set to > 0 to enable, otherwise disable.
-    public setTimeout(timeout: number | undefined): void {
-        if (timeout && timeout > 0) {
-            if (!this.hookFunctionPointer) {
-                this.hookFunctionPointer = this.lua.module.addFunction((): void => {
-                    if (Date.now() > timeout) {
-                        this.pushValue(new LuaTimeoutError(`thread timeout exceeded`))
-                        this.lua.lua_error(this.address)
-                    }
-                }, 'vii')
-            }
+    public setField(index: number, name: string, value: unknown): void {
+        index = this.luaApi.lua_absindex(this.address, index)
+        this.pushValue(value)
+        this.luaApi.lua_setfield(this.address, index, name)
+    }
 
-            this.lua.lua_sethook(this.address, this.hookFunctionPointer, LuaEventMasks.Count, INSTRUCTION_HOOK_COUNT)
-            this.timeout = timeout
-        } else if (this.hookFunctionPointer) {
-            this.hookFunctionPointer = undefined
-            this.timeout = undefined
-            this.lua.lua_sethook(this.address, null, 0, 0)
+    public loadString(luaCode: string, name?: string): void {
+        const size = this.luaApi.module.lengthBytesUTF8(luaCode)
+        const pointerSize = size + 1
+        const bufferPointer = this.luaApi.module._malloc(pointerSize)
+        try {
+            this.luaApi.module.stringToUTF8(luaCode, bufferPointer, pointerSize)
+            this.assertOk(this.luaApi.luaL_loadbuffer(this.address, bufferPointer, size, name ?? bufferPointer))
+        } finally {
+            this.luaApi.module._free(bufferPointer)
         }
     }
 
-    public getTimeout(): number | undefined {
-        return this.timeout
-    }
-
-    public getPointer(index: number): Pointer {
-        return new Pointer(this.lua.lua_topointer(this.address, index))
-    }
-
-    public isClosed(): boolean {
-        return !this.address || this.closed || Boolean(this.parent?.isClosed())
+    public loadFile(filename: string): void {
+        this.assertOk(this.luaApi.luaL_loadfilex(this.address, filename, null))
     }
 
     public indexToString(index: number): string {
-        const str = this.lua.luaL_tolstring(this.address, index, null)
+        const str = this.luaApi.lua_tolstring(this.address, index, null)
         // Pops the string pushed by luaL_tolstring
         this.pop()
         return str
-    }
-
-    public dumpStack(log = console.log): void {
-        const top = this.getTop()
-
-        for (let i = 1; i <= top; i++) {
-            const type = this.lua.lua_type(this.address, i)
-            const typename = this.lua.lua_typename(this.address, type)
-            const pointer = this.getPointer(i)
-            const name = this.indexToString(i)
-            const value = this.getValue(i, type)
-
-            log(i, typename, pointer, name, value)
-        }
     }
 
     public assertOk(result: LuaReturn): void {
@@ -375,7 +346,7 @@ export default class Thread {
             if (this.getTop() > 0) {
                 if (result === LuaReturn.ErrorMem) {
                     // If there's no memory just do a normal to string.
-                    error.message = this.lua.lua_tolstring(this.address, -1, null)
+                    error.message = this.luaApi.lua_tolstring(this.address, -1, null)
                 } else {
                     const luaError = this.getValue(-1)
                     if (luaError instanceof Error) {
@@ -388,20 +359,49 @@ export default class Thread {
             }
 
             // Also attempt to get a traceback
-            if (result !== LuaReturn.ErrorMem) {
-                try {
-                    this.lua.luaL_traceback(this.address, this.address, null, 1)
-                    const traceback = this.lua.lua_tolstring(this.address, -1, null)
-                    if (traceback.trim() !== 'stack traceback:') {
-                        error.message = `${error.message}\n${traceback}`
-                    }
-                    this.pop(1) // pop stack trace.
-                } catch (err) {
-                    console.warn('Failed to generate stack trace', err)
-                }
-            }
+            // lua5.1 doesn't have luaL_traceback
+            // if (result !== LuaReturn.ErrorMem) {
+            //     try {
+            //         this.luaApi.luaL_traceback(this.address, this.address, null, 1)
+            //         const traceback = this.luaApi.lua_tolstring(this.address, -1, null)
+            //         if (traceback.trim() !== 'stack traceback:') {
+            //             error.message = `${error.message}\n${traceback}`
+            //         }
+            //         this.pop(1) // pop stack trace.
+            //     } catch (err) {
+            //         console.warn('Failed to generate stack trace', err)
+            //     }
+            // }
 
             throw error
+        }
+    }
+
+    public getPointer(index: number): Pointer {
+        return new Pointer(this.luaApi.lua_topointer(this.address, index))
+    }
+
+    public getStackValues(start = 0): MultiReturn {
+        const returns = this.getTop() - start
+        const returnValues = new MultiReturn(returns)
+
+        for (let i = 0; i < returns; i++) {
+            returnValues[i] = this.getValue(start + i + 1)
+        }
+
+        return returnValues
+    }
+
+    public dumpStack(log = console.log): void {
+        const top = this.getTop()
+
+        for (let i = 1; i <= top; i++) {
+            const type = this.luaApi.lua_type(this.address, i)
+            const typename = this.luaApi.lua_typename(this.address, type)
+            const pointer = this.getPointer(i)
+            const name = this.indexToString(i)
+            const value = this.getValue(i, type)
+            log(i, typename, pointer, name, value)
         }
     }
 

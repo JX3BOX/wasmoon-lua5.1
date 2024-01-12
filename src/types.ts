@@ -24,8 +24,9 @@ export interface LuaThreadRunOptions {
 export const PointerSize = 4
 
 export const LUA_MULTRET = -1
-export const LUAI_MAXSTACK = 1000000
-export const LUA_REGISTRYINDEX = -LUAI_MAXSTACK - 1000
+export const LUA_REGISTRYINDEX = -10000
+export const LUA_ENVIRONINDEX = -10001
+export const LUA_GLOBALSINDEX = -10002
 
 export enum LuaType {
     None = -1,

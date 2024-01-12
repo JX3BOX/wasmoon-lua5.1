@@ -6,7 +6,7 @@ export { default as LuaMultiReturn } from './multireturn'
 export { default as LuaRawResult } from './raw-result'
 // Export the underlying bindings to allow users to just
 // use the bindings rather than the wrappers.
-export { default as LuaWasm } from './luawasm'
+export { default as LuaApi } from './lua-api'
 export { decorateFunction } from './type-extensions/function'
 export { decorateUserdata } from './type-extensions/userdata'
 export { decorateProxy } from './type-extensions/proxy'

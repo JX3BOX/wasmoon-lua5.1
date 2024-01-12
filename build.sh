@@ -15,7 +15,7 @@ else
 fi
 
 emcc \
-    -Wempty-body \
+    -Wno-empty-body \
     -s WASM=1 $extension -o ./build/lua.js \
     -s EXPORTED_RUNTIME_METHODS="[
         'ccall', \
@@ -43,19 +43,20 @@ emcc \
     -s NODEJS_CATCH_EXIT=0 \
     -s NODEJS_CATCH_REJECTION=0 \
     -s MALLOC=emmalloc \
-    -s STACK_SIZE=1MB \
-    -s WASM_BIGINT \
+    -s STACK_SIZE=4MB \
     -s EXPORTED_FUNCTIONS="[
         '_malloc', \
         '_free', \
         '_realloc', \
 
+        '_luaL_error',\
+        '_luaL_typerror',\
+        '_luaL_argerror',\
+
         '_luaL_addlstring',\
         '_luaL_addstring',\
         '_luaL_addvalue',\
-        '_luaL_argerror',\
-        '_luaL_buffinit',\
-        '_luaL_callmeta',\
+
         '_luaL_checkany',\
         '_luaL_checkinteger',\
         '_luaL_checklstring',\
@@ -64,12 +65,16 @@ emcc \
         '_luaL_checkstack',\
         '_luaL_checktype',\
         '_luaL_checkudata',\
-        '_luaL_error',\
-        '_luaL_getmetafield',\
-        '_luaL_gsub',\
+
         '_luaL_loadbuffer',\
         '_luaL_loadfile',\
         '_luaL_loadstring',\
+
+        '_luaL_buffinit',\
+        '_luaL_callmeta',\
+        '_luaL_getmetafield',\
+        '_luaL_gsub',\
+
         '_luaL_newmetatable',\
         '_luaL_newstate',\
         '_luaL_openlibs',\
@@ -78,9 +83,8 @@ emcc \
         '_luaL_optnumber',\
         '_luaL_prepbuffer',\
         '_luaL_pushresult',\
-        '_luaL_ref',\
         '_luaL_register',\
-        '_luaL_typerror',\
+        '_luaL_ref',\
         '_luaL_unref',\
         '_luaL_where',\
        
@@ -162,7 +166,7 @@ emcc \
         '_lua_type',\
         '_lua_typename',\
         '_lua_xmove',\
-        '_lua_yield',
+        '_lua_yield',\
 
         '_luaopen_base', \
         '_luaopen_table', \
