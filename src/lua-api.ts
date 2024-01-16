@@ -37,7 +37,7 @@ export default class LuaApi {
 
     public module: LuaEmscriptenModule
 
-    public luaL_error: (L: LuaState) => void
+    public luaL_error: (L: LuaState, fmt: string) => void
     public luaL_argerror: (L: LuaState, arg: number, extramsg: string | null) => number
     public luaL_typerror: (L: LuaState, arg: number, tname: string | null) => number
 
@@ -135,6 +135,7 @@ export default class LuaApi {
     public lua_tocfunction: (L: LuaState, idx: number) => number
     public lua_tointeger: (L: LuaState, idx: number) => number
     public lua_tolstring: (L: LuaState, idx: number, len: number | null) => string
+    public lua_tostring: (L: LuaState, idx: number) => string
     public lua_tonumber: (L: LuaState, idx: number) => number
     public lua_topointer: (L: LuaState, idx: number) => number
     public lua_tothread: (L: LuaState, idx: number) => LuaState
@@ -181,7 +182,7 @@ export default class LuaApi {
 
     constructor(module: LuaEmscriptenModule) {
         this.module = module
-        this.luaL_error = this.cwrap('luaL_error', null, ['number'])
+        this.luaL_error = this.cwrap('luaL_error', null, ['number', 'string'])
         this.luaL_argerror = this.cwrap('luaL_argerror', 'number', ['number', 'number', 'string'])
         this.luaL_typerror = this.cwrap('luaL_typerror', 'number', ['number', 'number', 'string'])
 
@@ -279,6 +280,7 @@ export default class LuaApi {
         this.lua_tocfunction = this.cwrap('lua_tocfunction', 'number', ['number', 'number'])
         this.lua_tointeger = this.cwrap('lua_tointeger', 'number', ['number', 'number'])
         this.lua_tolstring = this.cwrap('lua_tolstring', 'string', ['number', 'number', 'number'])
+        this.lua_tostring = (...args) => this.lua_tolstring(...args, null)
         this.lua_tonumber = this.cwrap('lua_tonumber', 'number', ['number', 'number'])
         this.lua_topointer = this.cwrap('lua_topointer', 'number', ['number', 'number'])
         this.lua_tothread = this.cwrap('lua_tothread', 'number', ['number', 'number'])
@@ -338,6 +340,39 @@ export default class LuaApi {
     public luaL_getmetatable(L: LuaState, tname: string | null): LuaType {
         this.lua_getfield(L, LUA_REGISTRYINDEX, tname)
         return this.lua_type(L, -1)
+    }
+
+    public luaL_typename(L: LuaState, idx: number): string {
+        return this.lua_typename(L, this.lua_type(L, idx))
+    }
+
+    // 5.1没有这个
+    public luaL_tolstring(L: LuaState, idx: number): string {
+        idx = this.lua_absindex(L, idx)
+        if (this.luaL_callmeta(L, idx, '__tostring')) {
+            if (!this.lua_isstring(L, -1)) {
+                this.luaL_error(L, "'__tostring' must return a string")
+            }
+            return 'error'
+        } else {
+            const type = this.lua_type(L, idx)
+            if (type === LuaType.Number) {
+                return `${this.lua_tonumber(L, idx)}`
+            } else if (type === LuaType.String) {
+                return this.lua_tostring(L, idx)
+            } else if (type === LuaType.Boolean) {
+                return this.lua_toboolean(L, idx) ? 'true' : 'false'
+            } else if (type === LuaType.Nil) {
+                return 'nil'
+            } else {
+                const tt = this.luaL_getmetafield(L, idx, '__name') // try name
+                const kind = tt === LuaType.String ? this.lua_tostring(L, -1) : this.luaL_typename(L, idx)
+                if (tt !== LuaType.Nil) {
+                    this.lua_remove(L, -2) // remove '__name' if pushed
+                }
+                return `${kind}: 0x${this.lua_topointer(L, idx).toString(16)}`
+            }
+        }
     }
 
     public lua_upvalueindex(index: number): number {
@@ -405,39 +440,45 @@ export default class LuaApi {
         argTypes: Array<Emscripten.JSType | 'string|number'>,
     ): (...args: any[]) => any {
         // optimization for common case
-        // console.log('define', name, returnType, argTypes)
-        const hasStringOrNumber = argTypes.some((argType) => argType === 'string|number')
-        if (!hasStringOrNumber) {
+        const commonType = ['number', 'string', 'array', 'boolean']
+        const isCommonCase = argTypes.every((argType) => commonType.includes(argType as string))
+        // 没有自定义类型的直接返回函数，少一层函数调用
+        if (isCommonCase) {
             return (...args: any[]) => {
-                //console.log('exec', name, returnType, argTypes, args)
                 return this.module.ccall(name, returnType, argTypes as Emscripten.JSType[], args as Emscripten.TypeCompatibleWithC[])
             }
         }
-
+        // 有自定义类型的，需要处理一下
         return (...args: any[]) => {
-            //console.log('exec', name, returnType, argTypes, args)
             const pointersToBeFreed: number[] = []
-            const resolvedArgTypes: Emscripten.JSType[] = argTypes.map((argType, i) => {
-                if (argType === 'string|number') {
+            // allow extra arguments
+            const resolvedArgTypes: Emscripten.JSType[] = []
+            const resolvedArgs: Emscripten.TypeCompatibleWithC[] = []
+            argTypes.forEach((argType, i) => {
+                if (commonType.includes(argType)) {
+                    resolvedArgTypes.push(argType as Emscripten.JSType)
+                    resolvedArgs.push(args[i] as Emscripten.TypeCompatibleWithC)
+                } else if (argType === 'string|number') {
                     if (typeof args[i] === 'number') {
-                        return 'number'
+                        resolvedArgTypes.push('number')
+                        resolvedArgs.push(args[i] as Emscripten.TypeCompatibleWithC)
                     } else {
                         // because it will be freed later, this can only be used on functions that lua internally copies the string
                         if (args[i]?.length > 1024) {
                             const bufferPointer = this.module.stringToNewUTF8(args[i] as string)
-                            args[i] = bufferPointer
+                            resolvedArgTypes.push('number')
+                            resolvedArgs.push(bufferPointer)
                             pointersToBeFreed.push(bufferPointer)
-                            return 'number'
                         } else {
-                            return 'string'
+                            resolvedArgTypes.push('string')
+                            resolvedArgs.push(args[i] as Emscripten.TypeCompatibleWithC)
                         }
                     }
                 }
-                return argType
             })
-
             try {
-                return this.module.ccall(name, returnType, resolvedArgTypes, args as Emscripten.TypeCompatibleWithC[])
+                console.log('exec', name, returnType, resolvedArgTypes, resolvedArgs)
+                return this.module.ccall(name, returnType, resolvedArgTypes, resolvedArgs)
             } finally {
                 for (const pointer of pointersToBeFreed) {
                     this.module._free(pointer)

@@ -218,7 +218,13 @@ export default class Thread {
                 this.luaApi.lua_pushboolean(this.address, target ? 1 : 0)
                 break
             default:
-                if (!this.typeExtensions.find((wrapper) => wrapper.extension.pushValue(this, decoratedValue, userdata))) {
+                if (
+                    !this.typeExtensions.find((wrapper) => {
+                        const result = wrapper.extension.pushValue(this, decoratedValue, userdata)
+                        // console.log(wrapper.extension.name, result, target)
+                        return result
+                    })
+                ) {
                     throw new Error(`The type '${typeof target}' is not supported by Lua`)
                 }
         }
@@ -292,6 +298,7 @@ export default class Thread {
 
     public getMetatableName(index: number): string | undefined {
         const metatableNameType = this.luaApi.luaL_getmetafield(this.address, index, '__name')
+
         if (metatableNameType === LuaType.Nil) {
             return undefined
         }
@@ -332,7 +339,7 @@ export default class Thread {
     }
 
     public indexToString(index: number): string {
-        const str = this.luaApi.lua_tolstring(this.address, index, null)
+        const str = this.luaApi.luaL_tolstring(this.address, index)
         // Pops the string pushed by luaL_tolstring
         this.pop()
         return str

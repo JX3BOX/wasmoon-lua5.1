@@ -82,7 +82,6 @@ async function main() {
         rl.prompt()
 
         for await (const line of rl) {
-            console.log('line', line)
             const loaded = loadcode(line) || loadcode(`return ${line}`)
             if (!loaded) {
                 console.log(lua.global.getValue(-1, LuaType.String))
@@ -91,7 +90,6 @@ async function main() {
             }
 
             const result = luamodule.lua_pcall(lua.global.address, 0, LUA_MULTRET, 0, 0, null)
-            lua.global.dumpStack()
             if (result === LuaReturn.Ok) {
                 const top = lua.global.getTop()
                 const returnValues = Array.from({ length: top }).map((_, i) => lua.global.indexToString(i + 1))
