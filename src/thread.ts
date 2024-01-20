@@ -436,7 +436,7 @@ export default class LuaThread {
         for (let i = 1; i <= top; i++) {
             const type = this.luaApi.lua_type(this.address, i);
             const typename = this.luaApi.luaL_typename(this.address, i);
-            const pointer = this.getPointer(i);
+            const pointer = this.getPointer(i).toString();
             const name = this.indexToString(i);
             const value = this.getValue(i, type);
             log(i, typename, pointer, name, value);

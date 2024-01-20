@@ -20,6 +20,6 @@
         "noUnusedParameters": true,
         "noUnusedLocals": true
     },
-    "include": ["./src/**/*", "./test/**/*", "./bench/**/*", "./types/*", "src/const.ts"],
+    "include": ["./src/**/*", "./bench/**/*", "./types/*"],
     "exclude": ["node_modules"]
 }

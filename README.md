@@ -2,7 +2,7 @@
 [![npm](https://img.shields.io/npm/v/wasmoon.svg)](https://npmjs.com/package/wasmoon)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-# Wasmoon
+# Wasmoon-lua5.1
 
 This package aims to provide a way to:
 
@@ -15,27 +15,20 @@ This package aims to provide a way to:
 To initialize, create a new Lua state, register the standard library, set a global variable, execute a code and get a global variable:
 
 ```js
-const { LuaFactory } = require('wasmoon')
+const { Lua } = require('wasmoon-lua5.1')
 
 // Initialize a new lua environment factory
 // You can pass the wasm location as the first argument, useful if you are using wasmoon on a web environment and want to host the file by yourself
-const factory = new LuaFactory()
+const lua = await Lua.create();
 // Create a standalone lua environment from the factory
-const lua = await factory.createEngine()
 
 try {
-    // Set a JS function to be a global lua function
-    lua.global.set('sum', (x, y) => x + y)
-    // Run a lua string
-    await lua.doString(`
-    print(sum(10, 10))
-    function multiply(x, y)
-        return x * y
-    end
+    const ctx = lua.ctx;
+    ctx.add = (a, b) => a + b
+    console.log(ctx.add(114514, 1919810)) 
+    lua.doString(`
+        print(add(114514, 1919810))
     `)
-    // Get a global lua function as a JS function
-    const multiply = lua.global.get('multiply')
-    console.log(multiply(10, 10))
 } finally {
     // Close the lua environment, so it can be freed
     lua.global.close()

@@ -1,4 +1,5 @@
 import typescript from '@rollup/plugin-typescript';
+import json from '@rollup/plugin-json';
 import copy from 'rollup-plugin-copy';
 import pkg from './package.json' assert { type: 'json' };
 
@@ -33,5 +34,6 @@ export default {
         copy({
             targets: [{ src: 'build/liblua5.1.wasm', dest: 'dist' }],
         }),
+        json(),
     ],
 };

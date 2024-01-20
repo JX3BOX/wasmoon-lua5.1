@@ -94,6 +94,16 @@ export default class Lua {
     }
 
     private initTypeBindings(): void {
+        // any
+        this.global.bindType({
+            name: 'js-userdata',
+            match: () => true,
+            push_metatable: () => {
+                this.luaApi.lua_createtable(this.global.address, 0, 1);
+                return true;
+            },
+        });
+
         // function
         const funcPointer = this.luaApi.module.addFunction((L: LuaState) => {
             const thread = this.global.stateToThread(L);

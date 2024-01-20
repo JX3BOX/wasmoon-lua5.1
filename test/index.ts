@@ -5,10 +5,14 @@ import { Lua } from '../src';
     const lua = await Lua.create();
 
     const ctx = lua.ctx;
-    ctx.f = () => 11;
 
-    await lua.doString(`print(f())`);
-    console.log(ctx.f());
+    ctx.asd = new Promise((resolve) => {
+        setTimeout(() => {
+            resolve('123');
+        }, 1000);
+    });
+
+    console.log(ctx.asd);
 })();
 
 // eslint-disable-next-line @typescript-eslint/no-floating-promises

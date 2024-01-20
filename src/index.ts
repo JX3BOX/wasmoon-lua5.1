@@ -5,4 +5,4 @@ export { default as LuaMultiReturn } from './multireturn';
 // use the bindings rather than the wrappers.
 export { default as LuaApi } from './api';
 export { default as Lua } from './lua';
-export * from './';
+export * from './definitions';
