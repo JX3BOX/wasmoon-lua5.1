@@ -18,7 +18,7 @@ export default class Lua {
                 (typeof self === 'object' && self?.constructor?.name === 'DedicatedWorkerGlobalScope');
 
             if (isBrowser) {
-                options.customWasmUri = `https://unpkg.com/wasmoon-lua5.1@${version}/dist/lua.wasm`;
+                options.customWasmUri = `https://unpkg.com/wasmoon-lua5.1@${version}/dist/liblua5.1.wasm`;
             }
         }
         const luaApi = await LuaApi.initialize(options.customWasmUri, options.environmentVariables);

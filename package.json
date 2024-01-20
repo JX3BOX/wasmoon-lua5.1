@@ -1,7 +1,7 @@
 {
-    "name": "wasmoon",
+    "name": "wasmoon-lua5.1",
     "version": "1.16.0",
-    "description": "A real lua VM with JS bindings made with webassembly",
+    "description": "A real lua 5.1 VM with JS bindings made with webassembly",
     "main": "dist/index.js",
     "scripts": {
         "build:wasm:dev": "./build.sh dev",
@@ -25,17 +25,18 @@
     },
     "repository": {
         "type": "git",
-        "url": "git+https://github.com/ceifa/wasmoon.git"
+        "url": "git+https://github.com/X3ZvaWQ/wasmoon-lua5.1.git"
     },
     "author": "ceifa",
     "license": "MIT",
     "bugs": {
-        "url": "https://github.com/ceifa/wasmoon/issues"
+        "url": "https://github.com/X3ZvaWQ/wasmoon-lua5.1/issues"
     },
-    "homepage": "https://github.com/ceifa/wasmoon#readme",
+    "homepage": "https://github.com/X3ZvaWQ/wasmoon-lua5.1#readme",
     "keywords": [
         "lua",
-        "moon",
+        "lua5.1",
+        "lua-bindlings",
         "wasm",
         "webassembly"
     ],
