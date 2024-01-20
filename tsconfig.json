@@ -1,5 +1,6 @@
 {
     "compilerOptions": {
+        "baseUrl": ".",
         "incremental": false,
         "moduleResolution": "node",
         "inlineSources": false,
@@ -8,16 +9,17 @@
         "target": "ES2018",
         "skipLibCheck": true,
         "lib": ["ESNEXT", "DOM"],
+        "importHelpers": true,
+        "strict": true,
+        "resolveJsonModule": true,
+
         "forceConsistentCasingInFileNames": true,
         "noImplicitReturns": true,
         "noImplicitThis": true,
         "noImplicitAny": true,
         "noUnusedParameters": true,
-        "noUnusedLocals": true,
-        "importHelpers": true,
-        "strict": true,
-        "resolveJsonModule": true
+        "noUnusedLocals": true
     },
-    "include": ["src/**/*", "test/**/*", "bench/**/*"],
+    "include": ["./src/**/*", "./test/**/*", "./bench/**/*", "./types/*", "src/const.ts"],
     "exclude": ["node_modules"]
 }

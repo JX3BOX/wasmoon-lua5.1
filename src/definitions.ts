@@ -1,6 +1,9 @@
-export type LuaState = number
+export const PointerSize = 4;
 
-export type EnvironmentVariables = Record<string, string | undefined>
+export const LUA_MULTRET = -1;
+export const LUA_REGISTRYINDEX = -10000;
+export const LUA_ENVIRONINDEX = -10001;
+export const LUA_GLOBALSINDEX = -10002;
 
 export enum LuaReturn {
     Ok = 0,
@@ -11,22 +14,6 @@ export enum LuaReturn {
     ErrorErr = 5,
     ErrorFile = 6,
 }
-
-export interface LuaResumeResult {
-    result: LuaReturn
-    resultCount: number
-}
-
-export interface LuaThreadRunOptions {
-    timeout?: number
-}
-
-export const PointerSize = 4
-
-export const LUA_MULTRET = -1
-export const LUA_REGISTRYINDEX = -10000
-export const LUA_ENVIRONINDEX = -10001
-export const LUA_GLOBALSINDEX = -10002
 
 export enum LuaType {
     None = -1,

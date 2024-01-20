@@ -16,7 +16,7 @@ fi
 
 emcc \
     -Wno-empty-body \
-    -s WASM=1 $extension -o ./build/lua.js \
+    -s WASM=1 $extension -o ./build/liblua5.1.js \
     -s EXPORTED_RUNTIME_METHODS="[
         'ccall', \
         'addFunction', \

@@ -1,29 +1,15 @@
-import { LuaFactory } from '../src'
+import { Lua } from '../src';
 
 // eslint-disable-next-line @typescript-eslint/no-floating-promises
-;(async () => {
-    const fac = new LuaFactory()
-    const engine = await fac.createEngine({ traceAllocations: false })
-    engine.global.set('x1', 1)
-    console.log('save success')
-    console.log(engine.global.get('x1'))
+(async () => {
+    const lua = await Lua.create();
 
-    engine.global.set('x2', true)
-    console.log('save success')
-    console.log(engine.global.get('x2'))
+    const ctx = lua.ctx;
+    ctx.f = () => 11;
 
-    engine.global.set('x3', null)
-    console.log('save success')
-    console.log(engine.global.get('x3'))
-
-    engine.global.set('x4', { tt: 2 })
-    console.log('save success')
-    console.log(engine.global.get('x4'))
-
-    engine.global.set('x5', (x: number) => x + 6)
-    console.log('save success')
-    console.log(engine.global.get('x5'))
-})()
+    await lua.doString(`print(f())`);
+    console.log(ctx.f());
+})();
 
 // eslint-disable-next-line @typescript-eslint/no-floating-promises
 // ;(async () => {

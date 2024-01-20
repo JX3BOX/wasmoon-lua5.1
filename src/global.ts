@@ -1,170 +1,141 @@
-import { LuaLibraries, LuaType } from './types'
-import LuaTypeExtension from './type-extension'
-import Thread from './thread'
-import type LuaApi from './lua-api'
+import { LuaLibraries } from './definitions';
+import LuaThread from './thread';
+import type LuaApi from './api';
 
 interface LuaMemoryStats {
-    memoryUsed: number
-    memoryMax?: number
+    memoryUsed: number;
+    memoryMax?: number;
 }
 
-export default class Global extends Thread {
-    private memoryStats: LuaMemoryStats | undefined
-    private allocatorFunctionPointer: number | undefined
+export default class LuaGlobal extends LuaThread {
+    private memoryStats: LuaMemoryStats | undefined;
+    private allocatorFunctionPointer: number | undefined;
 
-    public constructor(cmodule: LuaApi, shouldTraceAllocations: boolean) {
+    public constructor(cmodule: LuaApi, shouldTraceAllocations: boolean | undefined) {
         if (shouldTraceAllocations) {
-            const memoryStats: LuaMemoryStats = { memoryUsed: 0 }
+            const memoryStats: LuaMemoryStats = { memoryUsed: 0 };
             const allocatorFunctionPointer = cmodule.module.addFunction(
                 (_userData: number, pointer: number, oldSize: number, newSize: number): number => {
                     if (newSize === 0) {
                         if (pointer) {
-                            memoryStats.memoryUsed -= oldSize
-                            cmodule.module._free(pointer)
+                            memoryStats.memoryUsed -= oldSize;
+                            cmodule.module._free(pointer);
                         }
-                        return 0
+                        return 0;
                     }
 
-                    const endMemoryDelta = pointer ? newSize - oldSize : newSize
-                    const endMemory = memoryStats.memoryUsed + endMemoryDelta
+                    const endMemoryDelta = pointer ? newSize - oldSize : newSize;
+                    const endMemory = memoryStats.memoryUsed + endMemoryDelta;
 
                     if (newSize > oldSize && memoryStats.memoryMax && endMemory > memoryStats.memoryMax) {
-                        return 0
+                        return 0;
                     }
 
-                    const reallocated = cmodule.module._realloc(pointer, newSize)
+                    const reallocated = cmodule.module._realloc(pointer, newSize);
                     if (reallocated) {
-                        memoryStats.memoryUsed = endMemory
+                        memoryStats.memoryUsed = endMemory;
                     }
-                    return reallocated
+                    return reallocated;
                 },
                 'iiiii',
-            )
+            );
 
-            const address = cmodule.lua_newstate(allocatorFunctionPointer, null)
+            const address = cmodule.lua_newstate(allocatorFunctionPointer, null);
             if (!address) {
-                cmodule.module.removeFunction(allocatorFunctionPointer)
-                throw new Error('lua_newstate returned a null pointer')
+                cmodule.module.removeFunction(allocatorFunctionPointer);
+                throw new Error('lua_newstate returned a null pointer');
             }
-            super(cmodule, [], address)
+            super(cmodule, address);
 
-            this.memoryStats = memoryStats
-            this.allocatorFunctionPointer = allocatorFunctionPointer
+            this.memoryStats = memoryStats;
+            this.allocatorFunctionPointer = allocatorFunctionPointer;
         } else {
-            const address = cmodule.luaL_newstate()
-            super(cmodule, [], address)
+            const address = cmodule.luaL_newstate();
+            super(cmodule, address);
         }
 
         if (this.isClosed()) {
-            throw new Error('Global state could not be created (probably due to lack of memory)')
+            throw new Error('Global state could not be created (probably due to lack of memory)');
         }
     }
 
     public close(): void {
         if (this.isClosed()) {
-            return
+            return;
         }
 
-        super.close()
+        super.close();
 
         // Do this before removing the gc to force.
         // Here rather than in the threads because you don't
         // actually close threads, just pop them. Only the top-level
         // lua state needs closing.
-        this.luaApi.lua_close(this.address)
+        this.luaApi.lua_close(this.address);
 
         if (this.allocatorFunctionPointer) {
-            this.luaApi.module.removeFunction(this.allocatorFunctionPointer)
+            this.luaApi.module.removeFunction(this.allocatorFunctionPointer);
         }
-
-        for (const wrapper of this.typeExtensions) {
-            wrapper.extension.close()
-        }
-    }
-
-    // To allow library users to specify custom types
-    // Higher is more important and will be evaluated first.
-    public registerTypeExtension(priority: number, extension: LuaTypeExtension<unknown>): void {
-        this.typeExtensions.push({ extension, priority })
-        this.typeExtensions.sort((a, b) => b.priority - a.priority)
     }
 
     public loadLibrary(library: LuaLibraries): void {
         switch (library) {
             case LuaLibraries.Base:
-                this.luaApi.luaopen_base(this.address)
-                break
+                this.luaApi.luaopen_base(this.address);
+                break;
             case LuaLibraries.Table:
-                this.luaApi.luaopen_table(this.address)
-                break
+                this.luaApi.luaopen_table(this.address);
+                break;
             case LuaLibraries.IO:
-                this.luaApi.luaopen_io(this.address)
-                break
+                this.luaApi.luaopen_io(this.address);
+                break;
             case LuaLibraries.OS:
-                this.luaApi.luaopen_os(this.address)
-                break
+                this.luaApi.luaopen_os(this.address);
+                break;
             case LuaLibraries.String:
-                this.luaApi.luaopen_string(this.address)
-                break
+                this.luaApi.luaopen_string(this.address);
+                break;
             case LuaLibraries.Math:
-                this.luaApi.luaopen_math(this.address)
-                break
+                this.luaApi.luaopen_math(this.address);
+                break;
             case LuaLibraries.Debug:
-                this.luaApi.luaopen_debug(this.address)
-                break
+                this.luaApi.luaopen_debug(this.address);
+                break;
             case LuaLibraries.Package:
-                this.luaApi.luaopen_package(this.address)
-                break
+                this.luaApi.luaopen_package(this.address);
+                break;
         }
-        this.luaApi.lua_setglobal(this.address, library)
+        this.luaApi.lua_setglobal(this.address, library);
     }
 
     public get(name: string): any {
-        const type = this.luaApi.lua_getglobal(this.address, name)
-        const value = this.getValue(-1, type)
-        this.pop()
-        return value
+        const type = this.luaApi.lua_getglobal(this.address, name);
+        const value = this.getValue(-1, type);
+        this.pop();
+        return value;
     }
 
     public set(name: string, value: unknown): void {
-        this.pushValue(value)
-        this.luaApi.lua_setglobal(this.address, name)
-    }
-
-    public getTable(name: string, callback: (index: number) => void): void {
-        const startStackTop = this.getTop()
-        const type = this.luaApi.lua_getglobal(this.address, name)
-        try {
-            if (type !== LuaType.Table) {
-                throw new TypeError(`Unexpected type in ${name}. Expected ${LuaType[LuaType.Table]}. Got ${LuaType[type]}.`)
-            }
-            callback(startStackTop + 1)
-        } finally {
-            // +1 for the table
-            if (this.getTop() !== startStackTop + 1) {
-                console.warn(`getTable: expected stack size ${startStackTop} got ${this.getTop()}`)
-            }
-            this.setTop(startStackTop)
-        }
+        this.pushValue(value);
+        this.luaApi.lua_setglobal(this.address, name);
     }
 
     public getMemoryUsed(): number {
-        return this.getMemoryStatsRef().memoryUsed
+        return this.getMemoryStatsRef().memoryUsed;
     }
 
     public getMemoryMax(): number | undefined {
-        return this.getMemoryStatsRef().memoryMax
+        return this.getMemoryStatsRef().memoryMax;
     }
 
     public setMemoryMax(max: number | undefined): void {
-        this.getMemoryStatsRef().memoryMax = max
+        this.getMemoryStatsRef().memoryMax = max;
     }
 
     private getMemoryStatsRef(): LuaMemoryStats {
         if (!this.memoryStats) {
-            throw new Error('Memory allocations is not being traced, please build engine with { traceAllocations: true }')
+            throw new Error('Memory allocations is not being traced, please build engine with { traceAllocations: true }');
         }
 
-        return this.memoryStats
+        return this.memoryStats;
     }
 }
