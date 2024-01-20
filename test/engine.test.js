@@ -1,30 +1,30 @@
-const { LuaLibraries, LuaReturn, LuaThread, LuaType, decorate, decorateProxy, decorateUserdata } = require('..');
+// const { LuaLibraries, LuaReturn, LuaThread, LuaType, decorate, decorateProxy, decorateUserdata } = require('..');
 const { expect } = require('chai');
-//const { getEngine, getFactory } = require('./utils');
+// const { getEngine, getFactory } = require('./utils');
 const { Lua } = require('..');
-const { setTimeout } = require('node:timers/promises');
-const { EventEmitter } = require('events');
-const jestMock = require('jest-mock');
+// const { setTimeout } = require('node:timers/promises');
+// const { EventEmitter } = require('events');
+// const jestMock = require('jest-mock');
 
-class TestClass {
-    static hello() {
-        return 'world';
-    }
+// class TestClass {
+//     static hello() {
+//         return 'world';
+//     }
 
-    constructor(name) {
-        this.name = name;
-    }
+//     constructor(name) {
+//         this.name = name;
+//     }
 
-    getName() {
-        return this.name;
-    }
-}
+//     getName() {
+//         return this.name;
+//     }
+// }
 
 describe('Engine', () => {
     let intervals = [];
-    const setIntervalSafe = (callback, interval) => {
-        intervals.push(setInterval(() => callback(), interval));
-    };
+    // const setIntervalSafe = (callback, interval) => {
+    //     intervals.push(setInterval(() => callback(), interval));
+    // };
 
     afterEach(() => {
         for (const interval of intervals) {
