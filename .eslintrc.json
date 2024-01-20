@@ -23,7 +23,8 @@
         "dist/*",
         "build/*",
         "rollup.config.mjs",
-        "utils/*"
+        "utils/*",
+        "lua/*"
     ],
     "rules": {
         "no-console": "off",

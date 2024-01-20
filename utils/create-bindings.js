@@ -1,21 +1,21 @@
 #!/usr/bin/env node
 
-const readline = require('readline')
-const fs = require('fs')
+const readline = require('readline');
+const fs = require('fs');
 
 const rl = readline.createInterface({
     input: process.stdin,
     terminal: false,
-})
+});
 
 String.prototype.replaceAll = function (str, newStr) {
-    return this.split(str).join(newStr)
-}
+    return this.split(str).join(newStr);
+};
 
-const allFunctions = []
-const types = []
+const allFunctions = [];
+const types = [];
 
-const functionPointerTypes = ['lua_KFunction', 'lua_Reader', 'lua_Writer', 'lua_Alloc', 'lua_Hook', 'lua_WarnFunction']
+const functionPointerTypes = ['lua_KFunction', 'lua_Reader', 'lua_Writer', 'lua_Alloc', 'lua_Hook', 'lua_WarnFunction'];
 
 const bindingTypes = {
     'void': null,
@@ -34,7 +34,7 @@ const bindingTypes = {
     'lua_Unsigned': 'number',
     'lua_KContext': 'number',
     'lua_Debug*': 'number',
-}
+};
 
 const typescriptTypes = {
     'void': 'void',
@@ -53,7 +53,7 @@ const typescriptTypes = {
     'lua_Unsigned': 'number',
     'lua_KContext': 'number',
     'lua_Debug*': 'number',
-}
+};
 
 const functionsThatReturnType = [
     'lua_getfield',
@@ -66,7 +66,7 @@ const functionsThatReturnType = [
     'lua_type',
     'luaL_getmetafield',
     'luaL_getmetatable',
-]
+];
 
 const functionsThatReturnState = [
     'lua_load',
@@ -81,7 +81,7 @@ const functionsThatReturnState = [
     'luaL_loadfile',
     'luaL_loadfilex',
     'luaL_loadstring',
-]
+];
 
 const bannedFunctions = [
     // Not a defined function in our builds.
@@ -89,28 +89,28 @@ const bannedFunctions = [
     // Accepts string array
     'luaL_checkoption',
     'luaB_opentests',
-]
+];
 
 function mapTsType(type, name) {
     if (name && functionsThatReturnType.includes(name)) {
-        return 'LuaType'
+        return 'LuaType';
     }
     if (name && functionsThatReturnState.includes(name)) {
-        return 'LuaReturn'
+        return 'LuaReturn';
     }
-    const mapped = typescriptTypes[type]
+    const mapped = typescriptTypes[type];
     if (mapped === undefined) {
-        throw new Error('missing ts mapping')
+        throw new Error('missing ts mapping');
     }
     if (type.endsWith('*') && mapped !== 'LuaState' && !name) {
         // Pointers can be null, cast to nullptr.
-        return `${mapped} | null`
+        return `${mapped} | null`;
     }
-    return mapped
+    return mapped;
 }
 
 function parseNamedSymbol(symbol) {
-    const isPointer = symbol.includes('*')
+    const isPointer = symbol.includes('*');
 
     const [type, name] = symbol
         .replaceAll('const', '')
@@ -118,33 +118,33 @@ function parseNamedSymbol(symbol) {
         .replaceAll('*', '')
         .split(' ')
         .map((val) => val.trim())
-        .filter((val) => !!val)
+        .filter((val) => !!val);
     if (functionPointerTypes.includes(type)) {
-        return { type: 'void*', name }
+        return { type: 'void*', name };
     }
-    const saneType = isPointer ? `${type}*` : type
-    types.push(saneType)
+    const saneType = isPointer ? `${type}*` : type;
+    types.push(saneType);
 
-    return { type: saneType, name }
+    return { type: saneType, name };
 }
 
 function parseLine(line) {
-    const argStart = line.lastIndexOf('(')
+    const argStart = line.lastIndexOf('(');
     if (argStart < 0) {
-        console.warn('Cannot find parameters on line', line)
-        return undefined
+        console.warn('Cannot find parameters on line', line);
+        return undefined;
     }
-    const starter = line.substring(0, argStart)
-    const retPlusSymbol = starter.substring(line.indexOf(' ')).replaceAll('(', ' ').replaceAll(')', '')
-    const rawArgs = line.substring(argStart).substring(1).split(')')[0].split(',')
+    const starter = line.substring(0, argStart);
+    const retPlusSymbol = starter.substring(line.indexOf(' ')).replaceAll('(', ' ').replaceAll(')', '');
+    const rawArgs = line.substring(argStart).substring(1).split(')')[0].split(',');
     return {
         definition: parseNamedSymbol(retPlusSymbol),
         args: rawArgs.map((arg) => parseNamedSymbol(arg)).filter((arg) => arg.type !== 'void'),
-    }
+    };
 }
 
 rl.on('line', (file) => {
-    const rawFile = fs.readFileSync(file).toString()
+    const rawFile = fs.readFileSync(file).toString();
 
     const statements = rawFile
         .replace(/\/\*[\s\S]*?\*\/|\/\/.*/g, '')
@@ -153,68 +153,68 @@ rl.on('line', (file) => {
         .filter((line) => !line.trim().startsWith('#'))
         .join('\n')
         .split(';')
-        .map((statement) => statement.trim())
+        .map((statement) => statement.trim());
     const apiStatements = statements
         .filter((statement) => {
-            const starter = statement.trim().split(' ')[0]
-            return starter.includes('_API')
+            const starter = statement.trim().split(' ')[0];
+            return starter.includes('_API');
         })
-        .map((statement) => statement.replaceAll('\n', ''))
-    allFunctions.push(...apiStatements.map((statement) => parseLine(statement)).filter((statement) => !!statement))
-})
+        .map((statement) => statement.replaceAll('\n', ''));
+    allFunctions.push(...apiStatements.map((statement) => parseLine(statement)).filter((statement) => !!statement));
+});
 
 rl.on('close', () => {
     const bindings = allFunctions
         .map((fn) => {
             try {
                 if (bannedFunctions.includes(fn.definition.name)) {
-                    throw new Error('skipping banned function')
+                    throw new Error('skipping banned function');
                 }
                 const argArray = fn.args.map((arg) => {
-                    const type = bindingTypes[arg.type]
+                    const type = bindingTypes[arg.type];
                     if (type === undefined) {
-                        throw new Error('missing binding type')
+                        throw new Error('missing binding type');
                     }
                     if (!arg.name) {
-                        throw new Error('missing argument name')
+                        throw new Error('missing argument name');
                     }
-                    return type === null ? null : `'${type}'`
-                })
-                const returnType = bindingTypes[fn.definition.type]
+                    return type === null ? null : `'${type}'`;
+                });
+                const returnType = bindingTypes[fn.definition.type];
                 if (returnType === undefined) {
-                    throw new Error('missing binding return type')
+                    throw new Error('missing binding return type');
                 }
-                const quotedReturn = returnType === null ? null : `'${returnType}'`
+                const quotedReturn = returnType === null ? null : `'${returnType}'`;
                 const binding = `this.${fn.definition.name} = this.module.cwrap('${fn.definition.name}', ${quotedReturn}, [${argArray.join(
                     ', ',
-                )}])`
+                )}])`;
 
                 // public lua_newstate: (allocatorFunction: number, userData: number | null) => LuaState
                 const tsParams = fn.args.map((arg) => {
-                    let mapped = mapTsType(arg.type)
+                    let mapped = mapTsType(arg.type);
                     if (fn.definition.name === 'lua_resume' && arg.name === 'from') {
-                        mapped = `${mapped} | null`
+                        mapped = `${mapped} | null`;
                     }
-                    return `${arg.name}: ${mapped}`
-                })
-                const tsReturn = mapTsType(fn.definition.type, fn.definition.name)
-                const header = `public ${fn.definition.name}: (${tsParams.join(', ')}) => ${tsReturn}`
+                    return `${arg.name}: ${mapped}`;
+                });
+                const tsReturn = mapTsType(fn.definition.type, fn.definition.name);
+                const header = `public ${fn.definition.name}: (${tsParams.join(', ')}) => ${tsReturn}`;
 
-                const sh = `        '_${fn.definition.name}', \\`
+                const sh = `        '_${fn.definition.name}', \\`;
 
-                return { binding, header, sh }
+                return { binding, header, sh };
             } catch (err) {
-                console.warn(err.message, fn)
-                return undefined
+                console.warn(err.message, fn);
+                return undefined;
             }
         })
-        .filter((val) => !!val)
+        .filter((val) => !!val);
 
-    console.log(bindings.map((binding) => binding.binding).join('\n'))
-    console.log('\n\n')
-    console.log(bindings.map((binding) => binding.header).join('\n'))
-    console.log('\n\n')
-    console.log(bindings.map((binding) => binding.sh).join('\n'))
+    console.log(bindings.map((binding) => binding.binding).join('\n'));
+    console.log('\n\n');
+    console.log(bindings.map((binding) => binding.header).join('\n'));
+    console.log('\n\n');
+    console.log(bindings.map((binding) => binding.sh).join('\n'));
 
-    console.log(Array.from(new Set(types)))
-})
+    console.log(Array.from(new Set(types)));
+});

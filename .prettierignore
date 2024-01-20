@@ -3,4 +3,5 @@ node_modules/
 .rollup.cache/
 package-lock.json
 build/
+lua/
 .eslintrc.json

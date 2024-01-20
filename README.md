@@ -15,7 +15,7 @@ This package aims to provide a way to:
 To initialize, create a new Lua state, register the standard library, set a global variable, execute a code and get a global variable:
 
 ```js
-const { Lua } = require('wasmoon-lua5.1')
+const { Lua } = require('wasmoon-lua5.1');
 
 // Initialize a new lua environment factory
 // You can pass the wasm location as the first argument, useful if you are using wasmoon on a web environment and want to host the file by yourself
@@ -24,14 +24,14 @@ const lua = await Lua.create();
 
 try {
     const ctx = lua.ctx;
-    ctx.add = (a, b) => a + b
-    console.log(ctx.add(114514, 1919810)) 
+    ctx.add = (a, b) => a + b;
+    console.log(ctx.add(114514, 1919810));
     lua.doString(`
         print(add(114514, 1919810))
-    `)
+    `);
 } finally {
     // Close the lua environment, so it can be freed
-    lua.global.close()
+    lua.global.close();
 }
 ```
 
@@ -110,7 +110,7 @@ module.exports = {
             module: false,
         },
     },
-}
+};
 ```
 
 ### Rollup
@@ -121,7 +121,7 @@ With the package [rollup-plugin-ignore](https://www.npmjs.com/package/rollup-plu
 export default {
     input: 'src/index.js', // Here is your entry file,
     plugins: [ignore(['path', 'fs', 'child_process', 'crypto', 'url', 'module'])],
-}
+};
 ```
 
 ### Angular
@@ -186,17 +186,17 @@ npm test # ensure everything it's working fine
 Promises can be await'd from Lua with some caveats detailed in the below section. To await a Promise call `:await()` on it which will yield the Lua execution until the promise completes.
 
 ```js
-const { LuaFactory } = require('wasmoon')
-const factory = new LuaFactory()
-const lua = await factory.createEngine()
+const { LuaFactory } = require('wasmoon');
+const factory = new LuaFactory();
+const lua = await factory.createEngine();
 
 try {
-    lua.global.set('sleep', (length) => new Promise((resolve) => setTimeout(resolve, length)))
+    lua.global.set('sleep', (length) => new Promise((resolve) => setTimeout(resolve, length)));
     await lua.doString(`
         sleep(1000):await()
-    `)
+    `);
 } finally {
-    lua.global.close()
+    lua.global.close();
 }
 ```
 

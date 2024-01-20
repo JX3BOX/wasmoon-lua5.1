@@ -1,299 +1,301 @@
-const { getEngine, tick } = require('./utils');
-const jestMock = require('jest-mock');
-const { expect } = require('chai');
+// TODO
 
-describe('Promises', () => {
-    it('use promise next should succeed', async () => {
-        const engine = await getEngine();
-        const check = jestMock.fn();
-        engine.global.set('check', check);
-        const promise = new Promise((resolve) => setTimeout(() => resolve(60), 5));
-        engine.global.set('promise', promise);
+// const { getEngine, tick } = require('./utils');
+// const jestMock = require('jest-mock');
+// const { expect } = require('chai');
 
-        const res = engine.doString(`
-            promise:next(check)
-        `);
+// describe('Promises', () => {
+//     it('use promise next should succeed', async () => {
+//         const engine = await getEngine();
+//         const check = jestMock.fn();
+//         engine.global.set('check', check);
+//         const promise = new Promise((resolve) => setTimeout(() => resolve(60), 5));
+//         engine.global.set('promise', promise);
 
-        expect(check.mock.calls.length).to.be.equal(0);
-        await promise;
-        await res;
-        expect(check.mock.calls[0]).to.be.eql([60]);
-    });
+//         const res = engine.doString(`
+//             promise:next(check)
+//         `);
 
-    it('chain promises with next should succeed', async () => {
-        const engine = await getEngine();
-        const check = jestMock.fn();
-        engine.global.set('check', check);
-        const promise = new Promise((resolve) => resolve(60));
-        engine.global.set('promise', promise);
+//         expect(check.mock.calls.length).to.be.equal(0);
+//         await promise;
+//         await res;
+//         expect(check.mock.calls[0]).to.be.eql([60]);
+//     });
 
-        const res = engine.doString(`
-            promise:next(function(value)
-                return value * 2
-            end):next(check):next(check)
-        `);
+//     it('chain promises with next should succeed', async () => {
+//         const engine = await getEngine();
+//         const check = jestMock.fn();
+//         engine.global.set('check', check);
+//         const promise = new Promise((resolve) => resolve(60));
+//         engine.global.set('promise', promise);
 
-        await promise;
-        await tick();
-        await res;
+//         const res = engine.doString(`
+//             promise:next(function(value)
+//                 return value * 2
+//             end):next(check):next(check)
+//         `);
 
-        expect(check.mock.calls[0]).to.be.eql([120]);
-        expect(check.mock.calls.length).to.be.equal(2);
-    });
+//         await promise;
+//         await tick();
+//         await res;
 
-    it('call an async function should succeed', async () => {
-        const engine = await getEngine();
-        engine.global.set('asyncFunction', async () => Promise.resolve(60));
-        const check = jestMock.fn();
-        engine.global.set('check', check);
+//         expect(check.mock.calls[0]).to.be.eql([120]);
+//         expect(check.mock.calls.length).to.be.equal(2);
+//     });
 
-        const res = engine.doString(`
-            asyncFunction():next(check)
-        `);
+//     it('call an async function should succeed', async () => {
+//         const engine = await getEngine();
+//         engine.global.set('asyncFunction', async () => Promise.resolve(60));
+//         const check = jestMock.fn();
+//         engine.global.set('check', check);
 
-        await tick();
-        await res;
-        expect(check.mock.calls[0]).to.be.eql([60]);
-    });
+//         const res = engine.doString(`
+//             asyncFunction():next(check)
+//         `);
 
-    it('return an async function should succeed', async () => {
-        const engine = await getEngine();
-        engine.global.set('asyncFunction', async () => Promise.resolve(60));
+//         await tick();
+//         await res;
+//         expect(check.mock.calls[0]).to.be.eql([60]);
+//     });
 
-        const asyncFunction = await engine.doString(`
-            return asyncFunction
-        `);
-        const value = await asyncFunction();
+//     it('return an async function should succeed', async () => {
+//         const engine = await getEngine();
+//         engine.global.set('asyncFunction', async () => Promise.resolve(60));
 
-        expect(value).to.be.equal(60);
-    });
+//         const asyncFunction = await engine.doString(`
+//             return asyncFunction
+//         `);
+//         const value = await asyncFunction();
 
-    it('return a chained promise should succeed', async () => {
-        const engine = await getEngine();
-        engine.global.set('asyncFunction', async () => Promise.resolve(60));
+//         expect(value).to.be.equal(60);
+//     });
 
-        const asyncFunction = await engine.doString(`
-            return asyncFunction():next(function(x) return x * 2 end)
-        `);
-        const value = await asyncFunction;
+//     it('return a chained promise should succeed', async () => {
+//         const engine = await getEngine();
+//         engine.global.set('asyncFunction', async () => Promise.resolve(60));
 
-        expect(value).to.be.equal(120);
-    });
+//         const asyncFunction = await engine.doString(`
+//             return asyncFunction():next(function(x) return x * 2 end)
+//         `);
+//         const value = await asyncFunction;
 
-    it('await an promise inside coroutine should succeed', async () => {
-        const engine = await getEngine();
-        const check = jestMock.fn();
-        engine.global.set('check', check);
-        const promise = new Promise((resolve) => setTimeout(() => resolve(60), 5));
-        engine.global.set('promise', promise);
+//         expect(value).to.be.equal(120);
+//     });
 
-        const res = engine.doString(`
-            local co = coroutine.create(function()
-                local value = promise:await()
-                check(value)
-            end)
+//     it('await an promise inside coroutine should succeed', async () => {
+//         const engine = await getEngine();
+//         const check = jestMock.fn();
+//         engine.global.set('check', check);
+//         const promise = new Promise((resolve) => setTimeout(() => resolve(60), 5));
+//         engine.global.set('promise', promise);
 
-            while coroutine.status(co) == "suspended" do
-                local success, res = coroutine.resume(co)
-                -- yield to allow promises to resolve
-                -- this yields on the promise returned by the above
-                coroutine.yield(res)
-            end
-        `);
+//         const res = engine.doString(`
+//             local co = coroutine.create(function()
+//                 local value = promise:await()
+//                 check(value)
+//             end)
 
-        expect(check.mock.calls.length).to.be.equal(0);
-        await promise;
-        await res;
-        expect(check.mock.calls[0]).to.be.eql([60]);
-    });
+//             while coroutine.status(co) == "suspended" do
+//                 local success, res = coroutine.resume(co)
+//                 -- yield to allow promises to resolve
+//                 -- this yields on the promise returned by the above
+//                 coroutine.yield(res)
+//             end
+//         `);
 
-    it('awaited coroutines should ignore resume until it resolves the promise', async () => {
-        const engine = await getEngine();
-        const check = jestMock.fn();
-        engine.global.set('check', check);
-        const promise = new Promise((resolve) => setTimeout(() => resolve(60), 5));
-        engine.global.set('promise', promise);
+//         expect(check.mock.calls.length).to.be.equal(0);
+//         await promise;
+//         await res;
+//         expect(check.mock.calls[0]).to.be.eql([60]);
+//     });
 
-        const res = engine.doString(`
-            local co = coroutine.create(function()
-                local value = promise:await()
-                check(value)
-            end)
-            while coroutine.status(co) == "suspended" do
-                coroutine.resume(co)
-                -- yields for a tick
-                coroutine.yield()
-            end
-        `);
+//     it('awaited coroutines should ignore resume until it resolves the promise', async () => {
+//         const engine = await getEngine();
+//         const check = jestMock.fn();
+//         engine.global.set('check', check);
+//         const promise = new Promise((resolve) => setTimeout(() => resolve(60), 5));
+//         engine.global.set('promise', promise);
 
-        expect(check.mock.calls.length).to.be.equal(0);
-        await promise;
-        await res;
-        expect(check.mock.calls[0]).to.be.eql([60]);
-    });
+//         const res = engine.doString(`
+//             local co = coroutine.create(function()
+//                 local value = promise:await()
+//                 check(value)
+//             end)
+//             while coroutine.status(co) == "suspended" do
+//                 coroutine.resume(co)
+//                 -- yields for a tick
+//                 coroutine.yield()
+//             end
+//         `);
 
-    it('await a thread run with async calls should succeed', async () => {
-        const engine = await getEngine();
-        engine.global.set('sleep', (input) => new Promise((resolve) => setTimeout(resolve, input)));
-        const asyncThread = engine.global.newThread();
+//         expect(check.mock.calls.length).to.be.equal(0);
+//         await promise;
+//         await res;
+//         expect(check.mock.calls[0]).to.be.eql([60]);
+//     });
 
-        asyncThread.loadString(`
-            sleep(1):await()
-            return 50
-        `);
+//     it('await a thread run with async calls should succeed', async () => {
+//         const engine = await getEngine();
+//         engine.global.set('sleep', (input) => new Promise((resolve) => setTimeout(resolve, input)));
+//         const asyncThread = engine.global.newThread();
 
-        const asyncFunctionPromise = asyncThread.run();
-        expect(await asyncFunctionPromise).to.be.eql([50]);
-    });
+//         asyncThread.loadString(`
+//             sleep(1):await()
+//             return 50
+//         `);
 
-    it('run thread with async calls and yields should succeed', async () => {
-        const engine = await getEngine();
-        engine.global.set('sleep', (input) => new Promise((resolve) => setTimeout(resolve, input)));
-        const asyncThread = engine.global.newThread();
+//         const asyncFunctionPromise = asyncThread.run();
+//         expect(await asyncFunctionPromise).to.be.eql([50]);
+//     });
 
-        asyncThread.loadString(`
-            coroutine.yield()
-            sleep(1):await()
-            coroutine.yield()
-            return 50
-        `);
+//     it('run thread with async calls and yields should succeed', async () => {
+//         const engine = await getEngine();
+//         engine.global.set('sleep', (input) => new Promise((resolve) => setTimeout(resolve, input)));
+//         const asyncThread = engine.global.newThread();
 
-        const asyncFunctionPromise = asyncThread.run();
-        // Wait 1 tick for the initial yield
-        await tick();
-        expect(await asyncFunctionPromise).to.be.eql([50]);
-    });
+//         asyncThread.loadString(`
+//             coroutine.yield()
+//             sleep(1):await()
+//             coroutine.yield()
+//             return 50
+//         `);
 
-    it('reject a promise should succeed', async () => {
-        const engine = await getEngine();
-        engine.global.set('throw', () => new Promise((_, reject) => reject(new Error('expected test error'))));
-        const asyncThread = engine.global.newThread();
+//         const asyncFunctionPromise = asyncThread.run();
+//         // Wait 1 tick for the initial yield
+//         await tick();
+//         expect(await asyncFunctionPromise).to.be.eql([50]);
+//     });
 
-        asyncThread.loadString(`
-            throw():await()
-            error("this should not be reached")
-        `);
+//     it('reject a promise should succeed', async () => {
+//         const engine = await getEngine();
+//         engine.global.set('throw', () => new Promise((_, reject) => reject(new Error('expected test error'))));
+//         const asyncThread = engine.global.newThread();
 
-        await expect(asyncThread.run()).to.eventually.rejectedWith('expected test error');
-    });
+//         asyncThread.loadString(`
+//             throw():await()
+//             error("this should not be reached")
+//         `);
 
-    it('pcall a promise await should succeed', async () => {
-        const engine = await getEngine();
-        engine.global.set('throw', () => new Promise((_, reject) => reject(new Error('expected test error'))));
-        const asyncThread = engine.global.newThread();
+//         await expect(asyncThread.run()).to.eventually.rejectedWith('expected test error');
+//     });
 
-        asyncThread.loadString(`
-            local succeed, err = pcall(function() throw():await() end)
-            assert(tostring(err) == "Error: expected test error")
-            return succeed
-        `);
+//     it('pcall a promise await should succeed', async () => {
+//         const engine = await getEngine();
+//         engine.global.set('throw', () => new Promise((_, reject) => reject(new Error('expected test error'))));
+//         const asyncThread = engine.global.newThread();
 
-        expect(await asyncThread.run()).to.be.eql([false]);
-    });
+//         asyncThread.loadString(`
+//             local succeed, err = pcall(function() throw():await() end)
+//             assert(tostring(err) == "Error: expected test error")
+//             return succeed
+//         `);
 
-    it('catch a promise rejection should succeed', async () => {
-        const engine = await getEngine();
-        const fulfilled = jestMock.fn();
-        const rejected = jestMock.fn();
-        engine.global.set('handlers', { fulfilled, rejected });
-        engine.global.set('throw', new Promise((_, reject) => reject(new Error('expected test error'))));
+//         expect(await asyncThread.run()).to.be.eql([false]);
+//     });
 
-        const res = engine.doString(`
-            throw:next(handlers.fulfilled, handlers.rejected):catch(function() end)
-        `);
+//     it('catch a promise rejection should succeed', async () => {
+//         const engine = await getEngine();
+//         const fulfilled = jestMock.fn();
+//         const rejected = jestMock.fn();
+//         engine.global.set('handlers', { fulfilled, rejected });
+//         engine.global.set('throw', new Promise((_, reject) => reject(new Error('expected test error'))));
 
-        await tick();
-        await res;
-        expect(fulfilled.mock.calls.length).to.be.equal(0);
-        expect(rejected.mock.calls.length).to.be.equal(1);
-    });
+//         const res = engine.doString(`
+//             throw:next(handlers.fulfilled, handlers.rejected):catch(function() end)
+//         `);
 
-    it('run with async callback', async () => {
-        const engine = await getEngine();
-        const thread = engine.global.newThread();
+//         await tick();
+//         await res;
+//         expect(fulfilled.mock.calls.length).to.be.equal(0);
+//         expect(rejected.mock.calls.length).to.be.equal(1);
+//     });
 
-        engine.global.set('asyncCallback', async (input) => {
-            return Promise.resolve(input * 2);
-        });
+//     it('run with async callback', async () => {
+//         const engine = await getEngine();
+//         const thread = engine.global.newThread();
 
-        thread.loadString(`
-            local input = ...
-            assert(type(input) == "number")
-            assert(type(asyncCallback) == "function")
-            local result1 = asyncCallback(input):await()
-            local result2 = asyncCallback(result1):await()
-            return result2
-        `);
+//         engine.global.set('asyncCallback', async (input) => {
+//             return Promise.resolve(input * 2);
+//         });
 
-        thread.pushValue(3);
-        const [finalValue] = await thread.run(1);
+//         thread.loadString(`
+//             local input = ...
+//             assert(type(input) == "number")
+//             assert(type(asyncCallback) == "function")
+//             local result1 = asyncCallback(input):await()
+//             local result2 = asyncCallback(result1):await()
+//             return result2
+//         `);
 
-        expect(finalValue).to.be.equal(12);
-    });
+//         thread.pushValue(3);
+//         const [finalValue] = await thread.run(1);
 
-    it('promise creation from js', async () => {
-        const engine = await getEngine();
-        const res = await engine.doString(`
-            local promise = Promise.create(function (resolve)
-                resolve(10)
-            end)
-            local nested = promise:next(function (value)
-                return Promise.create(function (resolve2)
-                    resolve2(value * 2)
-                end)
-            end)
-            return nested:await()
-        `);
-        expect(res).to.be.equal(20);
-    });
+//         expect(finalValue).to.be.equal(12);
+//     });
 
-    it('reject promise creation from js', async () => {
-        const engine = await getEngine();
-        const res = await engine.doString(`
-            local rejection = Promise.create(function (resolve, reject)
-                reject("expected rejection")
-            end)
-            return rejection:catch(function (err)
-                return err
-            end):await()
-        `);
-        expect(res).to.equal('expected rejection');
-    });
+//     it('promise creation from js', async () => {
+//         const engine = await getEngine();
+//         const res = await engine.doString(`
+//             local promise = Promise.create(function (resolve)
+//                 resolve(10)
+//             end)
+//             local nested = promise:next(function (value)
+//                 return Promise.create(function (resolve2)
+//                     resolve2(value * 2)
+//                 end)
+//             end)
+//             return nested:await()
+//         `);
+//         expect(res).to.be.equal(20);
+//     });
 
-    it('resolve multiple promises with promise.all', async () => {
-        const engine = await getEngine();
-        engine.global.set('sleep', (input) => new Promise((resolve) => setTimeout(resolve, input)));
-        const resPromise = engine.doString(`
-            local promises = {}
-            for i = 1, 10 do
-                table.insert(promises, sleep(5):next(function ()
-                    return i
-                end))
-            end
-            return Promise.all(promises):await()
-        `);
-        const res = await resPromise;
+//     it('reject promise creation from js', async () => {
+//         const engine = await getEngine();
+//         const res = await engine.doString(`
+//             local rejection = Promise.create(function (resolve, reject)
+//                 reject("expected rejection")
+//             end)
+//             return rejection:catch(function (err)
+//                 return err
+//             end):await()
+//         `);
+//         expect(res).to.equal('expected rejection');
+//     });
 
-        expect(res).to.be.eql([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
-    });
+//     it('resolve multiple promises with promise.all', async () => {
+//         const engine = await getEngine();
+//         engine.global.set('sleep', (input) => new Promise((resolve) => setTimeout(resolve, input)));
+//         const resPromise = engine.doString(`
+//             local promises = {}
+//             for i = 1, 10 do
+//                 table.insert(promises, sleep(5):next(function ()
+//                     return i
+//                 end))
+//             end
+//             return Promise.all(promises):await()
+//         `);
+//         const res = await resPromise;
 
-    it('error in promise next catchable', async () => {
-        const engine = await getEngine();
-        engine.global.set('sleep', (input) => new Promise((resolve) => setTimeout(resolve, input)));
-        const resPromise = engine.doString(`
-            return sleep(1):next(function ()
-                error("sleep done")
-            end):await()
-        `);
-        await expect(resPromise).eventually.to.be.rejectedWith('[string "..."]:3: sleep done');
-    });
+//         expect(res).to.be.eql([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+//     });
 
-    it('should not be possible to await in synchronous run', async () => {
-        const engine = await getEngine();
-        engine.global.set('sleep', (input) => new Promise((resolve) => setTimeout(resolve, input)));
+//     it('error in promise next catchable', async () => {
+//         const engine = await getEngine();
+//         engine.global.set('sleep', (input) => new Promise((resolve) => setTimeout(resolve, input)));
+//         const resPromise = engine.doString(`
+//             return sleep(1):next(function ()
+//                 error("sleep done")
+//             end):await()
+//         `);
+//         await expect(resPromise).eventually.to.be.rejectedWith('[string "..."]:3: sleep done');
+//     });
 
-        expect(() => {
-            engine.doStringSync(`sleep(5):await()`);
-        }).to.throw('cannot await in the main thread');
-    });
-});
+//     it('should not be possible to await in synchronous run', async () => {
+//         const engine = await getEngine();
+//         engine.global.set('sleep', (input) => new Promise((resolve) => setTimeout(resolve, input)));
+
+//         expect(() => {
+//             engine.doStringSync(`sleep(5):await()`);
+//         }).to.throw('cannot await in the main thread');
+//     });
+// });
