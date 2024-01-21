@@ -1,30 +1,30 @@
-// const { LuaLibraries, LuaReturn, LuaThread, LuaType, decorate, decorateProxy, decorateUserdata } = require('..');
+const { LuaThread } = require('..');
 const { expect } = require('chai');
 // const { getEngine, getFactory } = require('./utils');
 const { Lua } = require('..');
-// const { setTimeout } = require('node:timers/promises');
+const { setTimeout } = require('node:timers/promises');
 // const { EventEmitter } = require('events');
-// const jestMock = require('jest-mock');
+const jestMock = require('jest-mock');
 
-// class TestClass {
-//     static hello() {
-//         return 'world';
-//     }
+class TestClass {
+    static hello() {
+        return 'world';
+    }
 
-//     constructor(name) {
-//         this.name = name;
-//     }
+    constructor(name) {
+        this.name = name;
+    }
 
-//     getName() {
-//         return this.name;
-//     }
-// }
+    getName() {
+        return this.name;
+    }
+}
 
 describe('Engine', () => {
     let intervals = [];
-    // const setIntervalSafe = (callback, interval) => {
-    //     intervals.push(setInterval(() => callback(), interval));
-    // };
+    const setIntervalSafe = (callback, interval) => {
+        intervals.push(setInterval(() => callback(), interval));
+    };
 
     afterEach(() => {
         for (const interval of intervals) {
@@ -133,181 +133,183 @@ describe('Engine', () => {
         expect(value).to.be.eql(arr);
     });
 
-    // it('receive JS object with multiple circular references on lua should succeed', async () => {
-    //     const engine = await getEngine();
-    //     const obj1 = {
-    //         hello: 'world',
-    //     };
-    //     obj1.self = obj1;
-    //     const obj2 = {
-    //         hello: 'everybody',
-    //     };
-    //     obj2.self = obj2;
-    //     engine.global.set('obj', { obj1, obj2 });
+    it('receive JS object with multiple circular references on lua should succeed', async () => {
+        const lua = await Lua.create();
 
-    //     await engine.doString(`
-    //         assert(obj.obj1.self.self.hello == "world")
-    //         assert(obj.obj2.self.self.hello == "everybody")
-    //     `);
-    // });
+        const obj1 = {
+            hello: 'world',
+        };
+        obj1.self = obj1;
+        const obj2 = {
+            hello: 'everybody',
+        };
+        obj2.self = obj2;
 
-    // it('receive JS object with null prototype on lua should succeed', async () => {
-    //     const engine = await getEngine();
-    //     const obj = Object.create(null);
-    //     obj.hello = 'world';
-    //     engine.global.set('obj', obj);
+        lua.ctx.obj = { obj1, obj2 };
 
-    //     const value = await engine.doString(`return obj.hello`);
+        await lua.doString(`
+            assert(obj.obj1.self.self.hello == "world")
+            assert(obj.obj2.self.self.hello == "everybody")
+        `);
+    });
 
-    //     expect(value).to.be.equal('world');
-    // });
+    it('receive JS object with null prototype on lua should succeed', async () => {
+        const lua = await Lua.create();
 
-    // it('a lua error should throw on JS', async () => {
-    //     const engine = await getEngine();
+        const obj = Object.create(null);
+        obj.hello = 'world';
 
-    //     await expect(engine.doString(`x -`)).to.eventually.be.rejected;
-    // });
+        lua.ctx.obj = obj;
 
-    // it('call a lua function from JS should succeed', async () => {
-    //     const engine = await getEngine();
+        const value = await lua.doString(`return obj.hello`);
+        expect(value).to.be.equal('world');
+    });
 
-    //     await engine.doString(`function sum(x, y) return x + y end`);
-    //     const sum = engine.global.get('sum');
+    it('a lua error should throw on JS', async () => {
+        const lua = await Lua.create();
 
-    //     expect(sum(10, 50)).to.be.equal(60);
-    // });
+        await expect(lua.doString(`x -`)).to.eventually.be.rejected;
+    });
 
-    // it('scheduled lua calls should succeed', async () => {
-    //     const engine = await getEngine();
-    //     engine.global.set('setInterval', setIntervalSafe);
+    it('call a lua function from JS should succeed', async () => {
+        const lua = await Lua.create();
 
-    //     await engine.doString(`
-    //         test = ""
-    //         setInterval(function()
-    //             test = test .. "i"
-    //         end, 1)
-    //     `);
-    //     await setTimeout(20);
+        await lua.doString(`function sum(x, y) return x + y end`);
+        const sum = lua.ctx.sum;
 
-    //     const test = engine.global.get('test');
-    //     expect(test).length.above(3);
-    //     expect(test).length.below(21);
-    //     expect(test).to.be.equal(''.padEnd(test.length, 'i'));
-    // });
+        expect(sum(10, 50)).to.be.equal(60);
+    });
 
-    // it('scheduled lua calls should fail silently if invalid', async () => {
-    //     const engine = await getEngine();
-    //     engine.global.set('setInterval', setIntervalSafe);
+    it('scheduled lua calls should succeed', async () => {
+        const lua = await Lua.create();
+        lua.ctx.setInterval = setIntervalSafe;
 
-    //     // TODO: Disable mock at the end of the test.
-    //     jestMock.spyOn(console, 'warn').mockImplementation(() => {
-    //         // Nothing to do.
-    //     });
+        await lua.doString(`
+            test = ""
+            setInterval(function()
+                test = test .. "i"
+            end, 1)
+        `);
+        await setTimeout(20);
 
-    //     await engine.doString(`
-    //         test = 0
-    //         setInterval(function()
-    //             test = test + 1
-    //         end, 5)
-    //     `);
+        const test = lua.ctx.test;
+        expect(test).length.above(3);
+        expect(test).length.below(21);
+        expect(test).to.be.equal(''.padEnd(test.length, 'i'));
+    });
 
-    //     engine.global.close();
+    /* it('scheduled lua calls should fail silently if invalid', async () => {
+        const lua = await Lua.create();
+        lua.ctx.setInterval = setIntervalSafe;
 
-    //     await setTimeout(5 + 5);
-    // });
+        // TODO: Disable mock at the end of the test.
+        jestMock.spyOn(console, 'warn').mockImplementation(() => {
+            // Nothing to do.
+        });
 
-    // it('call lua function from JS passing an array argument should succeed', async () => {
-    //     const engine = await getEngine();
+        await lua.doString(`
+            test = 0
+            setInterval(function()
+                test = test + 1
+            end, 5)
+        `);
 
-    //     const sum = await engine.doString(`
-    //         return function(arr)
-    //             local sum = 0
-    //             for k, v in ipairs(arr) do
-    //                 sum = sum + v
-    //             end
-    //             return sum
-    //         end
-    //     `);
+        lua.global.close();
 
-    //     expect(sum([10, 50, 25])).to.be.equal(85);
-    // });
+        await setTimeout(5 + 5);
+    }); */
 
-    // it('call a global function with multiple returns should succeed', async () => {
-    //     const engine = await getEngine();
+    it('call lua function from JS passing an array argument should succeed', async () => {
+        const lua = await Lua.create();
 
-    //     await engine.doString(`
-    //         function f(x,y)
-    //             return 1,x,y,"Hello World",{},function() end
-    //         end
-    //     `);
+        const sum = await lua.doString(`
+            return function(arr)
+                local sum = 0
+                for k, v in ipairs(arr) do
+                    sum = sum + v
+                end
+                return sum
+            end
+        `);
 
-    //     const returns = engine.global.call('f', 10, 25);
-    //     expect(returns).to.have.length(6);
-    //     expect(returns.slice(0, -1)).to.eql([1, 10, 25, 'Hello World', {}]);
-    //     expect(returns.at(-1)).to.be.a('function');
-    // });
+        expect(sum([10, 50, 25])).to.be.equal(85);
+    });
 
-    // it('get a lua thread should succeed', async () => {
-    //     const engine = await getEngine();
+    it('call a global function with multiple returns should succeed', async () => {
+        const lua = await Lua.create();
 
-    //     const thread = await engine.doString(`
-    //         return coroutine.create(function()
-    //             print("hey")
-    //         end)
-    //     `);
+        await lua.doString(`
+            function f(x,y)
+                return 1,x,y,"Hello World",{},function() end
+            end
+        `);
 
-    //     expect(thread).to.be.instanceOf(LuaThread);
-    //     expect(thread).to.not.be.equal(0);
-    // });
+        const returns = lua.global.call('f', 10, 25);
+        expect(returns).to.have.length(6);
+        expect(returns.slice(0, -1)).to.eql([1, 10, 25, 'Hello World', {}]);
+        expect(returns.at(-1)).to.be.a('function');
+    });
 
-    // it('a JS error should pause lua execution', async () => {
-    //     const engine = await getEngine();
-    //     const check = jestMock.fn();
-    //     engine.global.set('check', check);
-    //     engine.global.set('throw', () => {
-    //         throw new Error('expected error');
-    //     });
+    it('get a lua thread should succeed', async () => {
+        const lua = await Lua.create();
 
-    //     await expect(
-    //         engine.doString(`
-    //             throw()
-    //             check()
-    //         `),
-    //     ).eventually.to.be.rejected;
-    //     expect(check.mock.calls).to.have.length(0);
-    // });
+        const thread = await lua.doString(`
+            return coroutine.create(function()
+                print("hey")
+            end)
+        `);
 
-    // it('catch a JS error with pcall should succeed', async () => {
-    //     const engine = await getEngine();
-    //     const check = jestMock.fn();
-    //     engine.global.set('check', check);
-    //     engine.global.set('throw', () => {
-    //         throw new Error('expected error');
-    //     });
+        expect(thread).to.be.instanceOf(LuaThread);
+        expect(thread).to.not.be.equal(0);
+    });
 
-    //     await engine.doString(`
-    //         local success, err = pcall(throw)
-    //         assert(success == false)
-    //         assert(tostring(err) == "Error: expected error")
-    //         check()
-    //     `);
+    it('a JS error should pause lua execution', async () => {
+        const lua = await Lua.create();
 
-    //     expect(check.mock.calls).to.have.length(1);
-    // });
+        const check = jestMock.fn();
+        lua.ctx.check = check;
+        lua.ctx.throw = () => {
+            throw new Error('expected error');
+        };
+        await expect(
+            lua.doString(`
+                throw()
+                check()
+            `),
+        ).eventually.to.be.rejected;
+        expect(check.mock.calls).to.have.length(0);
+    });
 
-    // it('call a JS function in a different thread should succeed', async () => {
-    //     const engine = await getEngine();
-    //     const sum = jestMock.fn((x, y) => x + y);
-    //     engine.global.set('sum', sum);
+    it('catch a JS error with pcall should succeed', async () => {
+        const lua = await Lua.create();
+        const check = jestMock.fn();
+        lua.ctx.check = check;
+        lua.ctx.throw = () => {
+            throw new Error('Error: expected error');
+        };
+        await lua.doString(`
+            local success, err = pcall(throw)
+            assert(success == false)
+            assert(tostring(err) == "Error: expected error")
+            check()
+        `);
 
-    //     await engine.doString(`
-    //         coroutine.resume(coroutine.create(function()
-    //             sum(10, 20)
-    //         end))
-    //     `);
+        expect(check.mock.calls).to.have.length(1);
+    });
 
-    //     expect(sum.mock.lastCall).to.be.eql([10, 20]);
-    // });
+    it('call a JS function in a different thread should succeed', async () => {
+        const lua = await Lua.create();
+        const sum = jestMock.fn((x, y) => x + y);
+        lua.ctx.sum = sum;
+
+        await lua.doString(`
+            coroutine.resume(coroutine.create(function()
+                sum(10, 20)
+            end))
+        `);
+
+        expect(sum.mock.lastCall).to.be.eql([10, 20]);
+    });
 
     // it('get callable table as function should succeed', async () => {
     //     const engine = await getEngine();
@@ -465,31 +467,31 @@ describe('Engine', () => {
     // });
 
     // it('wrap a js object using proxy and apply metatable in lua', async () => {
-    //     const engine = await getEngine();
-    //     engine.global.set('TestClass', {
+    //     const lua = await Lua.create();
+    //     lua.ctx.TestClass = {
     //         create: (name) => new TestClass(name),
-    //     });
-    //     const res = await engine.doString(`
-    //     local instance = TestClass.create("demo name 2")
+    //     };
+    //     const res = await lua.doString(`
+    //         local instance = TestClass.create("demo name 2")
 
-    //     -- Based in the simple lua classes tutotial
-    //     local Wrapped = {}
-    //     Wrapped.__index = Wrapped
+    //         -- Based in the simple lua classes tutotial
+    //         local Wrapped = {}
+    //         Wrapped.__index = Wrapped
 
-    //     function Wrapped:create(name)
-    //         local wrapped = {}
-    //         wrapped.instance = TestClass.create(name)
-    //         setmetatable(wrapped, Wrapped)
-    //         return wrapped
-    //     end
+    //         function Wrapped:create(name)
+    //             local wrapped = {}
+    //             wrapped.instance = TestClass.create(name)
+    //             setmetatable(wrapped, Wrapped)
+    //             return wrapped
+    //         end
 
-    //     function Wrapped:getName()
-    //         return "wrapped: "..self.instance:getName()
-    //     end
+    //         function Wrapped:getName()
+    //             return "wrapped: "..self.instance:getName()
+    //         end
 
-    //     local wr = Wrapped:create("demo")
-    //     return wr:getName()
-    // `);
+    //         local wr = Wrapped:create("demo")
+    //         return wr:getName()
+    //     `);
     //     expect(res).to.be.equal('wrapped: demo');
     // });
 
@@ -767,27 +769,27 @@ describe('Engine', () => {
     // });
 
     // it('null injected and valid', async () => {
-    //     const engine = await getEngine();
-    //     engine.global.loadString(`
-    //     local args = { ... }
-    //     assert(args[1] == null, string.format("expected first argument to be null, got %s", tostring(args[1])))
-    //     return null, args[1], tostring(null)
-    //   `);
-    //     engine.global.pushValue(null);
-    //     const res = await engine.global.run(1);
+    //     const lua = await Lua.create();
+    //     lua.global.loadString(`
+    //         local args = { ... }
+    //         assert(args[1] == null, string.format("expected first argument to be null, got %s", tostring(args[1])))
+    //         return null, args[1], tostring(null)
+    //     `);
+    //     lua.global.pushValue(null);
+    //     const res = await lua.global.run(1);
     //     expect(res).to.deep.equal([null, null, 'null']);
     // });
 
-    // it('Nested callback from JS to Lua', async () => {
-    //     const engine = await getEngine();
-    //     engine.global.set('call', (fn) => fn());
-    //     const res = await engine.doString(`
-    //     return call(function ()
-    //       return call(function ()
-    //         return 10
-    //       end)
-    //     end)
-    //   `);
-    //     expect(res).to.equal(10);
-    // });
+    it('Nested callback from JS to Lua', async () => {
+        const lua = await Lua.create();
+        lua.ctx.call = (fn) => fn();
+        const res = await lua.doString(`
+            return call(function ()
+                return call(function ()
+                    return 10
+                end)
+            end)
+        `);
+        expect(res).to.equal(10);
+    });
 });

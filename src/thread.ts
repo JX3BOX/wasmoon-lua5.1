@@ -348,6 +348,21 @@ export default class LuaThread {
         return mapTransform(table);
     }
 
+    public call(name: string, ...args: any[]): MultiReturn {
+        const type = this.luaApi.lua_getglobal(this.address, name);
+        if (type !== LuaType.Function) {
+            throw new Error(`A function of type '${type}' was pushed, expected is ${LuaType.Function}`);
+        }
+
+        for (const arg of args) {
+            this.pushValue(arg);
+        }
+
+        const base = this.getTop() - args.length - 1; // The 1 is for the function to run
+        this.luaApi.lua_call(this.address, args.length, LUA_MULTRET);
+        return this.getStackValues(base);
+    }
+
     public pop(count = 1): void {
         this.luaApi.lua_pop(this.address, count);
     }
