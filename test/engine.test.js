@@ -6,19 +6,19 @@ const { setTimeout } = require('node:timers/promises');
 // const { EventEmitter } = require('events');
 const jestMock = require('jest-mock');
 
-class TestClass {
-    static hello() {
-        return 'world';
-    }
+// class TestClass {
+//     static hello() {
+//         return 'world';
+//     }
 
-    constructor(name) {
-        this.name = name;
-    }
+//     constructor(name) {
+//         this.name = name;
+//     }
 
-    getName() {
-        return this.name;
-    }
-}
+//     getName() {
+//         return this.name;
+//     }
+// }
 
 describe('Engine', () => {
     let intervals = [];

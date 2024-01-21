@@ -1,10 +1,10 @@
 import * as lodash from 'lodash';
 import { JsType } from './type-bind';
 import { LUA_MULTRET, LUA_REGISTRYINDEX, LuaEventMasks, LuaReturn, LuaTimeoutError, LuaType, PointerSize } from './definitions';
+import { mapTransform } from './utils/map';
 import MultiReturn from './multireturn';
 import Pointer from './utils/pointer';
 import type LuaApi from './api';
-import { mapTransform } from './utils/map';
 
 // When the debug count hook is set, call it every X instructions.
 const INSTRUCTION_HOOK_COUNT = 1000;
