@@ -1,8 +1,10 @@
+import { JsType, registerCallFunction, registerGcFunction, registerIndexFunction, registerNewIndexFunction } from './type-bind';
 import { version } from '../package.json';
 import LuaApi from './api';
 import LuaGlobal from './global';
 import LuaThread from './thread';
 import getContextProxy from './context';
+import { PointerSize } from './definitions';
 
 export default class Lua {
     // 静态方法 初始化一个Lua实例
@@ -94,54 +96,36 @@ export default class Lua {
     }
 
     private initTypeBindings(): void {
-        // any
-        this.global.bindType({
-            name: 'js-userdata',
-            match: () => true,
-            push_metatable: () => {
-                this.luaApi.lua_createtable(this.global.address, 0, 1);
-                return true;
-            },
-        });
+        const gcPointer = registerGcFunction(this.global);
+        const indexPointer = registerIndexFunction(this.global);
+        const newIndexPointer = registerNewIndexFunction(this.global);
+        const funcPointer = registerCallFunction(this.global);
 
-        // function
-        const funcPointer = this.luaApi.module.addFunction((L: LuaState) => {
-            const thread = this.global.stateToThread(L);
-            const top = thread.getTop();
-            const args = [];
-            const func = thread.getValue(1);
-            for (let i = 2; i <= top; i++) {
-                args.push(thread.getValue(i));
-            }
+        JsType.create('js-function', (value: any) => typeof value === 'function')
+            .gc(gcPointer)
+            .index(indexPointer)
+            .newindex(newIndexPointer)
+            .push(({ thread, target }) => {
+                const ref = thread.luaApi.ref(target);
+                const luaPointer = thread.luaApi.lua_newuserdata(thread.address, PointerSize);
+                thread.luaApi.module.setValue(luaPointer, ref, '*');
+                thread.luaApi.luaL_getmetatable(thread.address, 'js-function');
+                thread.luaApi.lua_setmetatable(thread.address, -2);
+                thread.luaApi.lua_pushcclosure(thread.address, funcPointer, 1);
+            })
+            .priority(1)
+            .apply(this.global);
 
-            try {
-                const result = func.apply(this.global, args);
-                thread.pushValue(result);
-                return 1;
-            } catch (e: any) {
-                if (typeof e?.message === 'string') {
-                    thread.pushValue(e?.message);
-                } else {
-                    thread.pushValue('Error: An exception occurred during the process of calling a JavaScript function.');
-                }
-                this.luaApi.lua_error(L);
-            }
-            return 0;
-        }, 'ii');
-
-        this.global.bindType({
-            name: 'function',
-            match: (target: any) => typeof target === 'function',
-            push_metatable: () => {
-                this.luaApi.lua_createtable(this.global.address, 0, 1);
-
-                this.luaApi.lua_pushstring(this.global.address, '__call');
-                this.luaApi.lua_pushcfunction(this.global.address, funcPointer);
-                this.luaApi.lua_settable(this.global.address, -3);
-
-                return true;
-            },
-        });
+        JsType.create('js-userdata', () => true)
+            .gc(gcPointer)
+            .call(funcPointer)
+            .index((...args: any[]) => {
+                console.log(args);
+            })
+            .newindex((...args: any[]) => {
+                console.log(args);
+            })
+            .apply(this.global);
     }
 
     // WARNING: It will not wait for open handles and can potentially cause bugs if JS code tries to reference Lua after executed

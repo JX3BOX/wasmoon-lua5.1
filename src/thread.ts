@@ -1,4 +1,5 @@
 import * as lodash from 'lodash';
+import { JsType } from './type-bind';
 import { LUA_MULTRET, LUA_REGISTRYINDEX, LuaEventMasks, LuaReturn, LuaTimeoutError, LuaType, PointerSize } from './definitions';
 import MultiReturn from './multireturn';
 import Pointer from './utils/pointer';
@@ -14,7 +15,7 @@ export default class LuaThread {
     private hookFunctionPointer: number | undefined;
     private timeout?: number;
     private readonly parent?: LuaThread;
-    private types: JsTypeDefinition[] = [];
+    private types: JsType[] = [];
 
     public constructor(luaApi: LuaApi, address: LuaState, parent?: LuaThread) {
         this.luaApi = luaApi;
@@ -142,8 +143,9 @@ export default class LuaThread {
         return this.timeout;
     }
 
-    public bindType(type: JsTypeDefinition): void {
+    public bindType(type: JsType): void {
         this.types.unshift(type);
+        this.types.sort((a, b) => b._priority - a._priority);
     }
 
     public getTop(): number {
@@ -186,14 +188,19 @@ export default class LuaThread {
             this.pushTable(target as Record<string | number, any>, options);
         } else {
             // 其他类型没有对应的lua类型，当userdata处理，找到对应js类型的metatable，绑定上
-            const type = this.types.find((t) => t.match(target)) as JsTypeDefinition;
+            const type = this.types.find((t) => t.match(target)) as JsType;
+            if (type._push) {
+                // 类型自定义push行为
+                type._push({ thread: this, target, options });
+            } else {
+                // 默认push行为
+                const ref = this.luaApi.ref(target);
+                const luaPointer = this.luaApi.lua_newuserdata(this.address, PointerSize);
+                this.luaApi.module.setValue(luaPointer, ref, '*');
 
-            const ref = this.luaApi.ref(target);
-            const luaPointer = this.luaApi.lua_newuserdata(this.address, PointerSize);
-            this.luaApi.module.setValue(luaPointer, ref, '*');
-
-            type.push_metatable();
-            this.luaApi.lua_setmetatable(this.address, -2);
+                this.luaApi.luaL_getmetatable(this.address, type?._name);
+                this.luaApi.lua_setmetatable(this.address, -2);
+            }
         }
 
         if (this.getTop() !== startTop + 1) {
@@ -463,6 +470,13 @@ export default class LuaThread {
             const name = this.indexToString(i);
             const value = this.getValue(i, type);
             log(i, typename, pointer, name, value);
+        }
+    }
+
+    // 调试用 输出所有注册的类型
+    public dumpTypes(log = console.log): void {
+        for (const type of this.types) {
+            log(type._name, type._priority);
         }
     }
 }
