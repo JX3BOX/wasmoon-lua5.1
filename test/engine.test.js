@@ -55,22 +55,21 @@ describe('Engine', () => {
         expect(value).to.be.eql({ test: 1 });
     });
 
-    // TODO
-    // it('receive JS object on lua should succeed', async () => {
-    //     const lua = await Lua.create();
-    //     lua.ctx.test = () => {
-    //         return {
-    //             aaaa: 1,
-    //             bbb: 'hey',
-    //             test() {
-    //                 return 22;
-    //             },
-    //         };
-    //     };
+    it('receive JS object on lua should succeed', async () => {
+        const lua = await Lua.create();
+        lua.ctx.test = () => {
+            return {
+                aaaa: 1,
+                bbb: 'hey',
+                test() {
+                    return 22;
+                },
+            };
+        };
 
-    //     const value = await lua.doString('return test().test()');
-    //     expect(value).to.be.equal(22);
-    // });
+        const value = await lua.doString('return test().test()');
+        expect(value).to.be.equal(22);
+    });
 
     it('receive JS object with circular references on lua should succeed', async () => {
         const lua = await Lua.create();
@@ -85,57 +84,54 @@ describe('Engine', () => {
         expect(value).to.be.equal('world');
     });
 
-    // it('receive Lua object with circular references on JS should succeed', async () => {
-    //     const engine = await getEngine();
-    //     const value = await engine.doString(`
-    //         local obj1 = {
-    //             hello = 'world',
-    //         }
-    //         obj1.self = obj1
-    //         local obj2 = {
-    //             5,
-    //             hello = 'everybody',
-    //             array = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
-    //             fn = function()
-    //                 return 'hello'
-    //             end
-    //         }
-    //         obj2.self = obj2
-    //         return { obj1 = obj1, obj2 }
-    //     `);
+    it('receive Lua object with circular references on JS should succeed', async () => {
+        const lua = await Lua.create();
 
-    //     const obj = {
-    //         obj1: {
-    //             hello: 'world',
-    //         },
-    //         1: {
-    //             1: 5,
-    //             hello: 'everybody',
-    //             array: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
-    //             // Emulate the lua function
-    //             fn: value[1].fn,
-    //         },
-    //     };
-    //     obj.obj1.self = obj.obj1;
-    //     obj[1].self = obj[1];
-    //     expect(value).to.deep.eql(obj);
-    // });
+        const value = await lua.doString(`
+            local obj1 = {
+                hello = 'world',
+            }
+            obj1.self = obj1
+            local obj2 = {
+                5,
+                hello = 'everybody',
+                array = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
+                fn = function()
+                    return 'hello'
+                end
+            }
+            obj2.self = obj2
+            return { obj1 = obj1, obj2 }
+        `);
 
-    // it('receive lua array with circular references on JS should succeed', async () => {
-    //     const engine = await getEngine();
-    //     const value = await engine.doString(`
-    //         obj = {
-    //             "hello",
-    //             "world"
-    //         }
-    //         table.insert(obj, obj)
-    //         return obj
-    //     `);
+        const obj = [[5]];
+        obj[0]['hello'] = 'everybody';
+        obj[0]['array'] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+        obj[0]['fn'] = value[0]['fn'];
+        obj['obj1'] = {
+            hello: 'world',
+        };
+        obj['obj1'].self = obj['obj1'];
+        obj[0].self = obj[0];
 
-    //     const arr = ['hello', 'world'];
-    //     arr.push(arr);
-    //     expect(value).to.be.eql(arr);
-    // });
+        expect(value).to.deep.eql(obj);
+    });
+
+    it('receive lua array with circular references on JS should succeed', async () => {
+        const lua = await Lua.create();
+        const value = await lua.doString(`
+            obj = {
+                "hello",
+                "world"
+            }
+            table.insert(obj, obj)
+            return obj
+        `);
+
+        const arr = ['hello', 'world'];
+        arr.push(arr);
+        expect(value).to.be.eql(arr);
+    });
 
     // it('receive JS object with multiple circular references on lua should succeed', async () => {
     //     const engine = await getEngine();

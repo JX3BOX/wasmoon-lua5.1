@@ -109,7 +109,7 @@ export default class LuaGlobal extends LuaThread {
 
     public get(name: string): any {
         const type = this.luaApi.lua_getglobal(this.address, name);
-        const value = this.getValue(-1, type);
+        const value = this.getValue(-1, { type });
         this.pop();
         return value;
     }

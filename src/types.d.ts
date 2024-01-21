@@ -43,3 +43,8 @@ declare interface JsTypeDefinition {
 declare interface PushValueOptions {
     refs?: Map<any, number>;
 }
+
+declare interface GetValueOptions {
+    refs?: Map<number, any>;
+    type?: LuaType;
+}

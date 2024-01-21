@@ -1,10 +1,10 @@
 import { JsType, registerCallFunction, registerGcFunction, registerIndexFunction, registerNewIndexFunction } from './type-bind';
+import { PointerSize } from './definitions';
 import { version } from '../package.json';
 import LuaApi from './api';
 import LuaGlobal from './global';
 import LuaThread from './thread';
 import getContextProxy from './context';
-import { PointerSize } from './definitions';
 
 export default class Lua {
     // 静态方法 初始化一个Lua实例

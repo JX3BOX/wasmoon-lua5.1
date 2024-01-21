@@ -4,6 +4,7 @@ import { LUA_MULTRET, LUA_REGISTRYINDEX, LuaEventMasks, LuaReturn, LuaTimeoutErr
 import MultiReturn from './multireturn';
 import Pointer from './utils/pointer';
 import type LuaApi from './api';
+import { mapTransform } from './utils/map';
 
 // When the debug count hook is set, call it every X instructions.
 const INSTRUCTION_HOOK_COUNT = 1000;
@@ -263,10 +264,10 @@ export default class LuaThread {
         }
     }
 
-    public getValue(index: number, inputType?: LuaType): any {
+    public getValue(index: number, options: GetValueOptions = {}): any {
         index = this.luaApi.lua_absindex(this.address, index);
 
-        const type: LuaType = inputType ?? this.luaApi.lua_type(this.address, index);
+        const type: LuaType = options.type ?? this.luaApi.lua_type(this.address, index);
         if (type === LuaType.None) {
             return undefined;
         } else if (type === LuaType.Nil) {
@@ -280,7 +281,7 @@ export default class LuaThread {
         } else if (type === LuaType.Thread) {
             return this.stateToThread(this.luaApi.lua_tothread(this.address, index));
         } else if (type === LuaType.Table) {
-            return this.getTable(index);
+            return this.getTable(index, options);
         } else if (type === LuaType.Function) {
             return this.getFunction(index);
         } else if (type === LuaType.Userdata) {
@@ -316,37 +317,36 @@ export default class LuaThread {
         };
     }
 
-    public getTable(index: number): Record<string | number, any> {
-        const pairs = [];
+    // lua的table太奔放了 甚至键可以是自身 js里可以匹配的数据结构只有Map
+    public getTable(index: number, options: GetValueOptions = {}): Record<string | number, any> {
+        const table = new Map();
+
+        if (!options.refs) {
+            options.refs = new Map<number, any>();
+        }
+        const pointer = this.luaApi.lua_topointer(this.address, index);
+        if (pointer) {
+            const target = options.refs.get(pointer);
+            if (target) {
+                return target;
+            }
+        }
+        options.refs.set(pointer, table);
 
         this.luaApi.lua_pushnil(this.address);
         while (this.luaApi.lua_next(this.address, index) !== 0) {
-            const key = this.getValue(-2);
-            const value = this.getValue(-1);
-            pairs.push({ key, value });
+            const key = this.getValue(-2, options);
+            const value = this.getValue(-1, options);
+            if (typeof key === 'number') {
+                table.set(key - 1, value);
+            } else {
+                table.set(key, value);
+            }
             this.pop();
         }
 
-        const keys = pairs.map((pair) => pair.key);
-        // 判断是不是数组
-        const isArray = keys.some((key) => lodash.isNumber(key));
-        if (isArray) {
-            const array = [];
-            for (const pair of pairs) {
-                if (lodash.isNumber(pair.key)) {
-                    array[pair.key - 1] = pair.value;
-                } else {
-                    array[pair.key] = pair.value;
-                }
-            }
-            return array;
-        } else {
-            const object: Record<string | number, any> = {};
-            for (const pair of pairs) {
-                object[pair.key as string] = pair.value;
-            }
-            return object;
-        }
+        // Map to object/array
+        return mapTransform(table);
     }
 
     public pop(count = 1): void {
@@ -415,6 +415,7 @@ export default class LuaThread {
                     // If there's no memory just do a normal to string.
                     error.message = this.luaApi.lua_tolstring(this.address, -1, null);
                 } else {
+                    this.dumpStack();
                     const luaError = this.getValue(-1);
                     if (luaError instanceof Error) {
                         error.stack = luaError.stack;
@@ -468,7 +469,7 @@ export default class LuaThread {
             const typename = this.luaApi.luaL_typename(this.address, i);
             const pointer = this.getPointer(i).toString();
             const name = this.indexToString(i);
-            const value = this.getValue(i, type);
+            const value = this.getValue(i, { type });
             log(i, typename, pointer, name, value);
         }
     }
