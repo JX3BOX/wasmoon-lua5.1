@@ -158,7 +158,7 @@ export default class LuaThread {
         return this.luaApi.lua_remove(this.address, index);
     }
 
-    public pushValue(target: unknown): void {
+    public pushValue(target: unknown, options: PushValueOptions = {}): void {
         // 如果值是线程
         if (target instanceof LuaThread) {
             const isMain = this.luaApi.lua_pushthread(target.address) === 1;
@@ -183,7 +183,7 @@ export default class LuaThread {
         } else if (typeof target === 'boolean') {
             this.luaApi.lua_pushboolean(this.address, target ? 1 : 0);
         } else if (lodash.isPlainObject(target) || lodash.isArray(target)) {
-            this.pushTable(target as Record<string | number, any>);
+            this.pushTable(target as Record<string | number, any>, options);
         } else {
             // 其他类型没有对应的lua类型，当userdata处理，找到对应js类型的metatable，绑定上
             const type = this.types.find((t) => t.match(target)) as JsTypeDefinition;
@@ -202,7 +202,17 @@ export default class LuaThread {
     }
 
     // js的plainObject和array - lua的table
-    public pushTable(object: Record<string | number, any>): void {
+    public pushTable(object: Record<string | number, any>, options: PushValueOptions = {}): void {
+        if (!options.refs) {
+            options.refs = new Map();
+        } else {
+            const ref = options.refs.get(object);
+            if (ref) {
+                this.luaApi.lua_rawgeti(this.address, LUA_REGISTRYINDEX, ref);
+                return;
+            }
+        }
+        // 正常push流程
         // 区分顺序部分和关联部分
         const arrIndexs: number[] = [];
         const recIndexs: string[] = [];
@@ -220,16 +230,29 @@ export default class LuaThread {
             // 对象直接丢进去
             recIndexs.push(...Object.keys(object));
         }
+
         this.luaApi.lua_createtable(this.address, arrIndexs.length, recIndexs.length);
-        for (const key of arrIndexs) {
-            this.pushValue(key + 1);
-            this.pushValue(object[key]);
-            this.luaApi.lua_settable(this.address, -3);
-        }
-        for (const key of recIndexs) {
-            this.pushValue(key);
-            this.pushValue(object[key]);
-            this.luaApi.lua_settable(this.address, -3);
+        // 存一下引用 方便检查 防止循环引用爆栈
+        const ref = this.luaApi.luaL_ref(this.address, LUA_REGISTRYINDEX);
+        this.luaApi.lua_rawgeti(this.address, LUA_REGISTRYINDEX, ref);
+        options.refs.set(object, ref);
+
+        try {
+            for (const key of arrIndexs) {
+                this.pushValue(key + 1, options);
+                this.pushValue(object[key], options);
+                this.luaApi.lua_settable(this.address, -3);
+            }
+            for (const key of recIndexs) {
+                this.pushValue(key, options);
+                this.pushValue(object[key], options);
+                this.luaApi.lua_settable(this.address, -3);
+            }
+        } finally {
+            const registerRefs = options.refs.values();
+            for (const ref of registerRefs) {
+                this.luaApi.luaL_unref(this.address, LUA_REGISTRYINDEX, ref);
+            }
         }
     }
 

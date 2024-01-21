@@ -39,3 +39,7 @@ declare interface JsTypeDefinition {
     match: (value: any) => boolean;
     push_metatable: () => boolean;
 }
+
+declare interface PushValueOptions {
+    refs?: Map<any, number>;
+}

@@ -138,6 +138,7 @@ export default class Lua {
                 this.luaApi.lua_pushstring(this.global.address, '__call');
                 this.luaApi.lua_pushcfunction(this.global.address, funcPointer);
                 this.luaApi.lua_settable(this.global.address, -3);
+
                 return true;
             },
         });

@@ -72,18 +72,18 @@ describe('Engine', () => {
     //     expect(value).to.be.equal(22);
     // });
 
-    // it('receive JS object with circular references on lua should succeed', async () => {
-    //     const lua = await Lua.create();
-    //     const obj = {
-    //         hello: 'world',
-    //     };
-    //     obj.self = obj;
+    it('receive JS object with circular references on lua should succeed', async () => {
+        const lua = await Lua.create();
+        const obj = {
+            hello: 'world',
+        };
+        obj.self = obj;
 
-    //     lua.ctx.obj = obj;
+        lua.ctx.obj = obj;
 
-    //     const value = await lua.doString('return obj.self.self.self.hello');
-    //     expect(value).to.be.equal('world');
-    // });
+        const value = await lua.doString('return obj.self.self.self.hello');
+        expect(value).to.be.equal('world');
+    });
 
     // it('receive Lua object with circular references on JS should succeed', async () => {
     //     const engine = await getEngine();
