@@ -379,7 +379,7 @@ export default class LuaApi {
     }
 
     public lua_upvalueindex(index: number): number {
-        return LUA_REGISTRYINDEX - index;
+        return LUA_GLOBALSINDEX - index;
     }
 
     public ref(data: unknown): number {
