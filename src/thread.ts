@@ -266,7 +266,6 @@ export default class LuaThread {
 
     public getValue(index: number, options: GetValueOptions = {}): any {
         index = this.luaApi.lua_absindex(this.address, index);
-
         const type: LuaType = options.type ?? this.luaApi.lua_type(this.address, index);
         if (type === LuaType.None) {
             return undefined;
@@ -320,7 +319,6 @@ export default class LuaThread {
     // lua的table太奔放了 甚至键可以是自身 js里可以匹配的数据结构只有Map
     public getTable(index: number, options: GetValueOptions = {}): Record<string | number, any> {
         const table = new Map();
-
         if (!options.refs) {
             options.refs = new Map<number, any>();
         }
@@ -330,13 +328,14 @@ export default class LuaThread {
             if (target) {
                 return target;
             }
+            options.refs.set(pointer, table);
         }
-        options.refs.set(pointer, table);
 
         this.luaApi.lua_pushnil(this.address);
         while (this.luaApi.lua_next(this.address, index) !== 0) {
-            const key = this.getValue(-2, options);
-            const value = this.getValue(-1, options);
+            const key = this.getValue(-2, { refs: options.refs });
+            const value = this.getValue(-1, { refs: options.refs });
+
             if (typeof key === 'number') {
                 table.set(key - 1, value);
             } else {
@@ -415,7 +414,6 @@ export default class LuaThread {
                     // If there's no memory just do a normal to string.
                     error.message = this.luaApi.lua_tolstring(this.address, -1, null);
                 } else {
-                    this.dumpStack();
                     const luaError = this.getValue(-1);
                     if (luaError instanceof Error) {
                         error.stack = luaError.stack;

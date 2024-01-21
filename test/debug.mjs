@@ -1,12 +1,14 @@
 import { Lua } from '../dist/index.js';
 
 // This file was created as a sandbox to test and debug on vscode
-const lua = await Lua.create();
+const lua = await Lua.create({ openStandardLibraries: true });
+lua.global.loadLibrary();
 lua.ctx.t = { test: 1 };
-lua.ctx.test = () => {
+lua.ctx.tet = () => {
     return lua.ctx.t;
 };
-const value = await lua.doString('return test(2)');
+await lua.doString('return tet(2)');
+const value = await lua.doString('return tet(2)');
 console.log(value);
 // await lua.doString('print(getmetatable(p))');
 // await lua.doString('print(getmetatable(p).__index)');
