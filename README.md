@@ -1,22 +1,20 @@
+# Wasmoon-lua5.1
+
 [![Build Status](https://github.com/X3ZvaWQ/wasmoon-lua5.1/actions/workflows/publish.yml/badge.svg)](https://github.com/ceifa/wasmoon/actions/workflows/publish.yml)
 [![npm](https://img.shields.io/npm/v/wasmoon-lua5.1.svg)](https://npmjs.com/package/wasmoon-lua5.1)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-# From
+## From
 
 [ceifa/wasmoon](https://github.com/ceifa/wasmoon)  
 
 This repository has made some modifications based on this repository, adapting it to the lua5.1 version. At the same time, some functions of this repository have been optimized/adapted/adjusted.
 
-# 
-
-# Wasmoon-lua5.1
-
 This package aims to provide a way to:
 
--   Embed Lua to any Node.js, Deno or Web Application.
--   Run lua code in any operational system
--   Interop Lua and JS without memory leaks (including the DOM)
+- Embed Lua to any Node.js, Deno or Web Application.
+- Run lua code in any operational system
+- Interop Lua and JS without memory leaks (including the DOM)
 
 ## API Usage
 
@@ -53,10 +51,10 @@ $: wasmoon [options] [file] [args]
 
 Available options are:
 
--   `-l`: Include a file or directory
--   `-i`: Enter interactive mode after running the files
+- `-l`: Include a file or directory
+- `-i`: Enter interactive mode after running the files
 
-### Example:
+### Example
 
 ```sh
 $: wasmoon -i sum.lua 10 30
@@ -222,7 +220,7 @@ print("res", res:await())
 
 Which will throw an error like this:
 
-```
+``` js
 Error: Lua Error(ErrorRun/2): cannot resume dead coroutine
     at Thread.assertOk (/home/tstableford/projects/wasmoon/dist/index.js:409:23)
     at Thread.<anonymous> (/home/tstableford/projects/wasmoon/dist/index.js:142:22)
@@ -232,7 +230,7 @@ Error: Lua Error(ErrorRun/2): cannot resume dead coroutine
 
 Or like this:
 
-```
+``` js
 attempt to yield across a C-call boundary
 ```
 

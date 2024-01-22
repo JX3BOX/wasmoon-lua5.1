@@ -1,4 +1,4 @@
-const { LuaThread } = require('..');
+const { LuaThread, LuaType, LuaReturn } = require('..');
 const { expect } = require('chai');
 // const { getEngine, getFactory } = require('./utils');
 const { Lua } = require('..');
@@ -198,7 +198,7 @@ describe('Engine', () => {
         expect(test).to.be.equal(''.padEnd(test.length, 'i'));
     });
 
-    /* it('scheduled lua calls should fail silently if invalid', async () => {
+    it('scheduled lua calls should fail silently if invalid', async () => {
         const lua = await Lua.create();
         lua.ctx.setInterval = setIntervalSafe;
 
@@ -217,7 +217,7 @@ describe('Engine', () => {
         lua.global.close();
 
         await setTimeout(5 + 5);
-    }); */
+    });
 
     it('call lua function from JS passing an array argument should succeed', async () => {
         const lua = await Lua.create();
@@ -311,47 +311,48 @@ describe('Engine', () => {
         expect(sum.mock.lastCall).to.be.eql([10, 20]);
     });
 
-    // it('get callable table as function should succeed', async () => {
-    //     const engine = await getEngine();
-    //     await engine.doString(`
-    //     _G['sum'] = setmetatable({}, {
-    //         __call = function(self, x, y)
-    //             return x + y
-    //         end
-    //     })
-    // `);
+    it('get callable table as function should succeed', async () => {
+        const lua = await Lua.create();
 
-    //     engine.global.lua.lua_getglobal(engine.global.address, 'sum');
-    //     const sum = engine.global.getValue(-1, LuaType.Function);
+        await lua.doString(`
+            _G['sum'] = setmetatable({}, {
+                __call = function(self, x, y)
+                    return x + y
+                end
+            })
+        `);
 
-    //     expect(sum(10, 30)).to.be.equal(40);
-    // });
+        lua.global.luaApi.lua_getglobal(lua.global.address, 'sum');
+        const sum = lua.global.getValue(-1, { type: LuaType.Function });
 
-    // it('lua_resume with yield succeeds', async () => {
-    //     const engine = await getEngine();
-    //     const thread = engine.global.newThread();
-    //     thread.loadString(`
-    //     local yieldRes = coroutine.yield(10)
-    //     return yieldRes
-    // `);
+        expect(sum(10, 30)).to.be.equal(40);
+    });
 
-    //     const resumeResult = thread.resume(0);
-    //     expect(resumeResult.result).to.be.equal(LuaReturn.Yield);
-    //     expect(resumeResult.resultCount).to.be.equal(1);
+    it('lua_resume with yield succeeds', async () => {
+        const lua = await Lua.create();
+        const thread = lua.global.newThread();
+        thread.loadString(`
+            local yieldRes = coroutine.yield(10)
+            return yieldRes
+        `);
 
-    //     const yieldValue = thread.getValue(-1);
-    //     expect(yieldValue).to.be.equal(10);
+        const resumeResult = thread.resume(0);
+        expect(resumeResult.result).to.be.equal(LuaReturn.Yield);
+        expect(resumeResult.resultCount).to.be.equal(1);
 
-    //     thread.pop(resumeResult.resultCount);
-    //     thread.pushValue(yieldValue * 2);
+        const yieldValue = thread.getValue(-1);
+        expect(yieldValue).to.be.equal(10);
 
-    //     const finalResumeResult = thread.resume(1);
-    //     expect(finalResumeResult.result).to.be.equal(LuaReturn.Ok);
-    //     expect(finalResumeResult.resultCount).to.be.equal(1);
+        thread.pop(resumeResult.resultCount);
+        thread.pushValue(yieldValue * 2);
 
-    //     const finalValue = thread.getValue(-1);
-    //     expect(finalValue).to.be.equal(20);
-    // });
+        const finalResumeResult = thread.resume(1);
+        expect(finalResumeResult.result).to.be.equal(LuaReturn.Ok);
+        expect(finalResumeResult.resultCount).to.be.equal(1);
+
+        const finalValue = thread.getValue(-1);
+        expect(finalValue).to.be.equal(20);
+    });
 
     // it('get memory with allocation tracing should succeeds', async () => {
     //     const engine = await getEngine({ traceAllocations: true });

@@ -105,18 +105,11 @@ export default class LuaThread {
     }
 
     public resume(argCount = 0): LuaResumeResult {
-        // TODO: lua5.1 和 lua5.4 的协程相关机制有点变化 没看懂 到时候再改
-        const dataPointer = this.luaApi.module._malloc(PointerSize);
-        try {
-            this.luaApi.module.setValue(dataPointer, 0, 'i32');
-            const luaResult = this.luaApi.lua_resume(this.address, argCount);
-            return {
-                result: luaResult,
-                resultCount: this.luaApi.module.getValue(dataPointer, 'i32'),
-            };
-        } finally {
-            this.luaApi.module._free(dataPointer);
-        }
+        const luaResult = this.luaApi.lua_resume(this.address, argCount);
+        return {
+            result: luaResult,
+            resultCount: this.getTop(),
+        };
     }
 
     // Set to > 0 to enable, otherwise disable.
@@ -295,6 +288,11 @@ export default class LuaThread {
         const func = this.luaApi.luaL_ref(this.address, LUA_REGISTRYINDEX);
 
         return (...args: any[]): any => {
+            if (this.isClosed()) {
+                console.warn('Tried to call a function after closing lua state');
+                return;
+            }
+
             const thread = this.newThread();
             thread.luaApi.lua_rawgeti(thread.address, LUA_REGISTRYINDEX, func);
             try {
@@ -478,12 +476,10 @@ export default class LuaThread {
         const top = this.getTop();
 
         for (let i = 1; i <= top; i++) {
-            const type = this.luaApi.lua_type(this.address, i);
             const typename = this.luaApi.luaL_typename(this.address, i);
             const pointer = this.getPointer(i).toString();
             const name = this.indexToString(i);
-            const value = this.getValue(i, { type });
-            log(i, typename, pointer, name, value);
+            log(i, typename, pointer, name);
         }
     }
 
