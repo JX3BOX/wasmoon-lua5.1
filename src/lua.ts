@@ -1,4 +1,11 @@
-import { JsType, registerCallFunction, registerGcFunction, registerIndexFunction, registerNewIndexFunction } from './type-bind';
+import {
+    JsType,
+    registerCallFunction,
+    registerFuncCallFunction,
+    registerGcFunction,
+    registerIndexFunction,
+    registerNewIndexFunction,
+} from './type-bind';
 import { PointerSize } from './definitions';
 import { version } from '../package.json';
 import LuaApi from './api';
@@ -99,7 +106,8 @@ export default class Lua {
         const gcPointer = registerGcFunction(this.global);
         const indexPointer = registerIndexFunction(this.global);
         const newIndexPointer = registerNewIndexFunction(this.global);
-        const funcPointer = registerCallFunction(this.global);
+        const funcPointer = registerFuncCallFunction(this.global);
+        const callPointer = registerCallFunction(this.global);
 
         JsType.create('js-function', (value: any) => typeof value === 'function')
             .gc(gcPointer)
@@ -118,12 +126,12 @@ export default class Lua {
 
         JsType.create('js-userdata', () => true)
             .gc(gcPointer)
-            .call(funcPointer)
-            .index((...args: any[]) => {
-                console.log(args);
+            .call(callPointer)
+            .index((target, index) => {
+                return target[index];
             })
-            .newindex((...args: any[]) => {
-                console.log(args);
+            .newindex((target: any, index: any, value: any) => {
+                return (target[index] = value);
             })
             .apply(this.global);
     }

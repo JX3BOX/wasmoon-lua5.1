@@ -46,7 +46,7 @@ export const registerNewIndexFunction = (thread: LuaThread): number => {
     return newindexPointer;
 };
 
-export const registerCallFunction = (thread: LuaThread): number => {
+export const registerFuncCallFunction = (thread: LuaThread): number => {
     const callPointer = thread.luaApi.module.addFunction((L: LuaState) => {
         const callThread = thread.stateToThread(L);
         const top = callThread.getTop();
@@ -61,6 +61,33 @@ export const registerCallFunction = (thread: LuaThread): number => {
 
         try {
             const result = func.apply(thread, args);
+            callThread.pushValue(result);
+            return 1;
+        } catch (e: any) {
+            if (typeof e?.message === 'string') {
+                callThread.pushValue(e?.message);
+            } else {
+                callThread.pushValue('Error: An exception occurred during the process of calling a JavaScript function.');
+            }
+            callThread.luaApi.lua_error(L);
+        }
+        return 0;
+    }, 'ii');
+    return callPointer;
+};
+
+export const registerCallFunction = (thread: LuaThread): number => {
+    const callPointer = thread.luaApi.module.addFunction((L: LuaState) => {
+        const callThread = thread.stateToThread(L);
+        const top = callThread.getTop();
+        const target = callThread.getValue(1);
+        const args = [];
+        for (let i = 2; i <= top; i++) {
+            args.push(callThread.getValue(i));
+        }
+
+        try {
+            const result = target(...args);
             callThread.pushValue(result);
             return 1;
         } catch (e: any) {
