@@ -15,12 +15,12 @@ import getContextProxy from './context';
 
 export default class Lua {
     // 静态方法 初始化一个Lua实例
-    public static async create(
-        options: LuaCreateOptions = {
+    public static async create(options: LuaCreateOptions = {}): Promise<Lua> {
+        options = {
             openStandardLibs: true,
             traceAllocations: false,
-        },
-    ): Promise<Lua> {
+            ...options,
+        };
         if (!options.customWasmUri) {
             const isBrowser =
                 (typeof window === 'object' && typeof window.document !== 'undefined') ||
