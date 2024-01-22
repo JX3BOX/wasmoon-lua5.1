@@ -3,6 +3,7 @@ import LuaGlobal from './global';
 const getContextProxy = (global: LuaGlobal): LuaContext => {
     return new Proxy(global, {
         get: (target: LuaGlobal, key) => {
+            // TODO: implement iterator for all global variables
             if (key === Symbol.iterator) {
                 return {
                     next: () => {

@@ -354,76 +354,78 @@ describe('Engine', () => {
         expect(finalValue).to.be.equal(20);
     });
 
-    // it('get memory with allocation tracing should succeeds', async () => {
-    //     const engine = await getEngine({ traceAllocations: true });
-    //     expect(engine.global.getMemoryUsed()).to.be.greaterThan(0);
-    // });
+    it('get memory with allocation tracing should succeeds', async () => {
+        const lua = await Lua.create({ traceAllocations: true });
+        expect(lua.global.getMemoryUsed()).to.be.greaterThan(0);
+    });
 
-    // it('get memory should return correct', async () => {
-    //     const engine = await getEngine({ traceAllocations: true });
+    it('get memory should return correct', async () => {
+        const lua = await Lua.create({ traceAllocations: true });
 
-    //     const totalMemory = await engine.doString(`
-    //     collectgarbage()
-    //     local x = 10
-    //     local batata = { dawdwa = 1 }
-    //     return collectgarbage('count') * 1024
-    // `);
+        const totalMemory = await lua.doString(`
+            collectgarbage()
+            local x = 10
+            local batata = { dawdwa = 1 }
+            return collectgarbage('count') * 1024
+        `);
 
-    //     expect(engine.global.getMemoryUsed()).to.be.equal(totalMemory);
-    // });
+        expect(lua.global.getMemoryUsed()).to.be.equal(totalMemory);
+    });
 
-    // it('get memory without tracing should throw', async () => {
-    //     const engine = await getEngine({ traceAllocations: false });
+    it('get memory without tracing should throw', async () => {
+        const lua = await Lua.create({ traceAllocations: false });
 
-    //     expect(() => engine.global.getMemoryUsed()).to.throw();
-    // });
+        expect(() => lua.global.getMemoryUsed()).to.throw();
+    });
 
-    // it('limit memory use causes program loading failure succeeds', async () => {
-    //     const engine = await getEngine({ traceAllocations: true });
-    //     engine.global.setMemoryMax(engine.global.getMemoryUsed());
-    //     expect(() => {
-    //         engine.global.loadString(`
-    //         local a = 10
-    //         local b = 20
-    //         return a + b
-    //     `);
-    //     }).to.throw('not enough memory');
+    it('limit memory use causes program loading failure succeeds', async () => {
+        const lua = await Lua.create({ traceAllocations: true });
+        lua.global.setMemoryMax(lua.global.getMemoryUsed());
+        expect(() => {
+            lua.global.loadString(`
+                local a = 10
+                local b = 20
+                return a + b
+            `);
+        }).to.throw('not enough memory');
 
-    //     // Remove the limit and retry
-    //     engine.global.setMemoryMax(undefined);
-    //     engine.global.loadString(`
-    //     local a = 10
-    //     local b = 20
-    //     return a + b
-    // `);
-    // });
+        // Remove the limit and retry
+        lua.global.setMemoryMax(undefined);
+        lua.global.loadString(`
+            local a = 10
+            local b = 20
+            return a + b
+        `);
+    });
 
-    // it('limit memory use causes program runtime failure succeeds', async () => {
-    //     const engine = await getEngine({ traceAllocations: true });
-    //     engine.global.loadString(`
-    //     local tab = {}
-    //     for i = 1, 50, 1 do
-    //         tab[i] = i
-    //     end
-    // `);
-    //     engine.global.setMemoryMax(engine.global.getMemoryUsed());
+    it('limit memory use causes program runtime failure succeeds', async () => {
+        const lua = await Lua.create({ traceAllocations: true });
+        lua.global.loadString(`
+            local tab = {}
+            for i = 1, 50, 1 do
+                tab[i] = i
+            end
+        `);
+        lua.global.setMemoryMax(lua.global.getMemoryUsed());
 
-    //     await expect(engine.global.run()).to.eventually.be.rejectedWith('not enough memory');
-    // });
+        await expect(lua.global.run()).to.eventually.be.rejectedWith('not enough memory');
+    });
 
-    // it('table supported circular dependencies', async () => {
-    //     const engine = await getEngine();
+    it('table supported circular dependencies', async () => {
+        const lua = await Lua.create();
 
-    //     const a = { name: 'a' };
-    //     const b = { name: 'b' };
-    //     b.a = a;
-    //     a.b = b;
+        const a = { name: 'a' };
+        const b = { name: 'b' };
+        b.a = a;
+        a.b = b;
 
-    //     engine.global.pushValue(a);
-    //     const res = engine.global.getValue(-1);
+        lua.global.pushValue(a);
+        const res = lua.global.getValue(-1);
+        console.log(res.b.a);
+        console.log(res);
 
-    //     expect(res.b.a).to.be.eql(res);
-    // });
+        expect(res.b.a).to.be.eql(res);
+    });
 
     // it('wrap a js object (with metatable)', async () => {
     //     const engine = await getEngine();

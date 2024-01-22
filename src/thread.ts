@@ -317,6 +317,7 @@ export default class LuaThread {
     // lua的table太奔放了 甚至键可以是自身 js里可以匹配的数据结构只有Map
     public getTable(index: number, options: GetValueOptions = {}): Record<string | number, any> {
         const table = new Map();
+        const needTransform = !options.refs;
         if (!options.refs) {
             options.refs = new Map<number, any>();
         }
@@ -342,8 +343,7 @@ export default class LuaThread {
             this.pop();
         }
 
-        // Map to object/array
-        return mapTransform(table);
+        return needTransform ? mapTransform(table) : table;
     }
 
     public call(name: string, ...args: any[]): MultiReturn {
