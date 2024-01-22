@@ -109,7 +109,7 @@ export default class Lua {
         const funcPointer = registerFuncCallFunction(this.global);
         const callPointer = registerCallFunction(this.global);
 
-        JsType.create('js-function', (value: any) => typeof value === 'function')
+        JsType.create('js-function', (value: any) => typeof value === 'function' && !value.toString().startsWith('class'))
             .gc(gcPointer)
             .index(indexPointer)
             .newindex(newIndexPointer)
@@ -128,6 +128,11 @@ export default class Lua {
             .gc(gcPointer)
             .call(callPointer)
             .index((target, index) => {
+                const result = target[index];
+                if (typeof result === 'function') {
+                    // XXX: this is a hack to make sure that the function is called with the correct this
+                    return result.bind(target);
+                }
                 return target[index];
             })
             .newindex((target: any, index: any, value: any) => {

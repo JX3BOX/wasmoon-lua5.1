@@ -114,8 +114,8 @@ export default class LuaGlobal extends LuaThread {
         return value;
     }
 
-    public set(name: string, value: unknown): void {
-        this.pushValue(value);
+    public set(name: string, value: unknown, options?: PushValueOptions): void {
+        this.pushValue(value, options);
         this.luaApi.lua_setglobal(this.address, name);
     }
 

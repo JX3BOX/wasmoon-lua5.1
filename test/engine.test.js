@@ -1,4 +1,4 @@
-const { LuaThread, LuaType, LuaReturn } = require('..');
+const { JsType, LuaThread, LuaType, LuaReturn } = require('../dist/index');
 const { expect } = require('chai');
 // const { getEngine, getFactory } = require('./utils');
 const { Lua } = require('..');
@@ -6,19 +6,19 @@ const { setTimeout } = require('node:timers/promises');
 // const { EventEmitter } = require('events');
 const jestMock = require('jest-mock');
 
-// class TestClass {
-//     static hello() {
-//         return 'world';
-//     }
+class TestClass {
+    static hello() {
+        return 'world';
+    }
 
-//     constructor(name) {
-//         this.name = name;
-//     }
+    constructor(name) {
+        this.name = name;
+    }
 
-//     getName() {
-//         return this.name;
-//     }
-// }
+    getName() {
+        return this.name;
+    }
+}
 
 describe('Engine', () => {
     let intervals = [];
@@ -421,122 +421,111 @@ describe('Engine', () => {
 
         lua.global.pushValue(a);
         const res = lua.global.getValue(-1);
-        console.log(res.b.a);
-        console.log(res);
 
         expect(res.b.a).to.be.eql(res);
     });
 
-    // it('wrap a js object (with metatable)', async () => {
-    //     const engine = await getEngine();
-    //     engine.global.set('TestClass', {
-    //         create: (name) => {
-    //             return decorate(
-    //                 {
-    //                     instance: decorateUserdata(new TestClass(name)),
-    //                 },
-    //                 {
-    //                     metatable: {
-    //                         __name: 'js_TestClass',
-    //                         __index: (self, key) => {
-    //                             if (key === 'name') {
-    //                                 return self.instance.getName();
-    //                             }
-    //                             return null;
-    //                         },
-    //                     },
-    //                 },
-    //             );
-    //         },
-    //     });
+    it('wrap a js object (with metatable)', async () => {
+        const lua = await Lua.create();
 
-    //     const res = await engine.doString(`
-    //     local instance = TestClass.create("demo name")
-    //     return instance.name
-    // `);
-    //     expect(res).to.be.equal('demo name');
-    // });
+        JsType.create('js_TestClass', (target) => target instanceof TestClass)
+            .index((self, key) => {
+                if (key === 'name') {
+                    return self.getName();
+                }
+                return null;
+            })
+            .priority(1)
+            .apply(lua.global);
 
-    // it('wrap a js object using proxy', async () => {
-    //     const engine = await getEngine();
-    //     engine.global.set('TestClass', {
-    //         create: (name) => new TestClass(name),
-    //     });
-    //     const res = await engine.doString(`
-    //     local instance = TestClass.create("demo name 2")
-    //     return instance:getName()
-    // `);
-    //     expect(res).to.be.equal('demo name 2');
-    // });
+        lua.ctx.TestClass = {
+            create: (name) => new TestClass(name),
+        };
 
-    // it('wrap a js object using proxy and apply metatable in lua', async () => {
-    //     const lua = await Lua.create();
-    //     lua.ctx.TestClass = {
-    //         create: (name) => new TestClass(name),
-    //     };
-    //     const res = await lua.doString(`
-    //         local instance = TestClass.create("demo name 2")
+        const res = await lua.doString(`
+            local instance = TestClass.create("demo name")
+            return instance.name
+        `);
+        expect(res).to.be.equal('demo name');
+    });
 
-    //         -- Based in the simple lua classes tutotial
-    //         local Wrapped = {}
-    //         Wrapped.__index = Wrapped
+    it('wrap a js object using proxy', async () => {
+        const lua = await Lua.create();
+        lua.ctx.TestClass = {
+            create: (name) => new TestClass(name),
+        };
+        const res = await lua.doString(`
+            local instance = TestClass.create("demo name 2")
+            return instance:getName()
+        `);
+        expect(res).to.be.equal('demo name 2');
+    });
 
-    //         function Wrapped:create(name)
-    //             local wrapped = {}
-    //             wrapped.instance = TestClass.create(name)
-    //             setmetatable(wrapped, Wrapped)
-    //             return wrapped
-    //         end
+    it('wrap a js object using proxy and apply metatable in lua', async () => {
+        const lua = await Lua.create();
+        lua.ctx.TestClass = {
+            create: (name) => new TestClass(name),
+        };
+        const res = await lua.doString(`
+            local instance = TestClass.create("demo name 2")
 
-    //         function Wrapped:getName()
-    //             return "wrapped: "..self.instance:getName()
-    //         end
+            -- Based in the simple lua classes tutotial
+            local Wrapped = {}
+            Wrapped.__index = Wrapped
 
-    //         local wr = Wrapped:create("demo")
-    //         return wr:getName()
-    //     `);
-    //     expect(res).to.be.equal('wrapped: demo');
-    // });
+            function Wrapped:create(name)
+                local wrapped = {}
+                wrapped.instance = TestClass.create(name)
+                setmetatable(wrapped, Wrapped)
+                return wrapped
+            end
 
-    // it('classes should be a userdata when proxied', async () => {
-    //     const engine = await getEngine();
-    //     engine.global.set('obj', { TestClass });
+            function Wrapped:getName()
+                return "wrapped: "..self.instance:getName()
+            end
 
-    //     const testClass = await engine.doString(`
-    //     return obj.TestClass
-    // `);
+            local wr = Wrapped:create("demo")
+            return wr:getName()
+        `);
+        expect(res).to.be.equal('wrapped: demo');
+    });
 
-    //     expect(testClass).to.be.equal(TestClass);
-    // });
+    it('classes should be a userdata when proxied', async () => {
+        const lua = await Lua.create();
+        lua.ctx.obj = { TestClass };
 
+        const testClass = await lua.doString(`
+            return obj.TestClass
+        `);
+        expect(testClass).to.be.equal(TestClass);
+    });
+
+    // ?? TODO: Fix this test
     // it('timeout blocking lua program', async () => {
-    //     const engine = await getEngine();
-    //     engine.global.loadString(`
+    //     const lua = await Lua.create();
+    //     lua.global.loadString(`
     //         local i = 0
     //         while true do i = i + 1 end
     //     `);
 
-    //     await expect(engine.global.run(0, { timeout: 5 })).eventually.to.be.rejectedWith('thread timeout exceeded');
+    //     await expect(lua.global.run(0, { timeout: 5 })).eventually.to.be.rejectedWith('thread timeout exceeded');
     // });
 
-    // it('overwrite lib function', async () => {
-    //     const engine = await getEngine();
+    it('overwrite lib function', async () => {
+        const lua = await Lua.create();
 
-    //     let output = '';
-    //     engine.global.getTable(LuaLibraries.Base, (index) => {
-    //         engine.global.setField(index, 'print', (val) => {
-    //             // Not a proper print implementation.
-    //             output += `${val}\n`;
-    //         });
-    //     });
+        let output = '';
+        lua.ctx.print = (val) => {
+            output += `${val}\n`;
+        };
 
-    //     await engine.doString(`
-    //     print("hello")
-    //     print("world")
-    // `);
+        await lua.doString(`
+            print("hello")
+            print("world")
+        `);
 
-    //     expect(output).to.be.equal('hello\nworld\n');
-    // });
+        expect(output).to.be.equal('hello\nworld\n');
+    });
 
     // it('inject a userdata with a metatable should succeed', async () => {
     //     const engine = await getEngine();

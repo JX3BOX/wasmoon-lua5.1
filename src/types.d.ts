@@ -42,6 +42,7 @@ declare interface JsTypeDefinition {
 
 declare interface PushValueOptions {
     refs?: Map<any, number>;
+    metatable?: Record<string, any>;
 }
 
 declare interface GetValueOptions {
