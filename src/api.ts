@@ -175,10 +175,10 @@ export default class LuaApi {
     public luaopen_debug: (L: LuaState) => number;
     public luaopen_package: (L: LuaState) => number;
 
-    private referenceTracker = new WeakMap<any, ReferenceMetadata>();
-    private referenceMap = new Map<number, any>();
-    private availableReferences: number[] = [];
-    private lastRefIndex?: number;
+    public referenceTracker = new WeakMap<any, ReferenceMetadata>();
+    public referenceMap = new Map<number, any>();
+    public availableReferences: number[] = [];
+    public lastRefIndex?: number;
 
     constructor(module: LuaEmscriptenModule) {
         this.module = module;
@@ -354,7 +354,7 @@ export default class LuaApi {
             if (!this.lua_isstring(L, -1)) {
                 this.luaL_error(L, "'__tostring' must return a string");
             }
-            result = 'error';
+            result = this.luaL_tolstring(L, -1);
         } else {
             const type = this.lua_type(L, idx);
             if (type === LuaType.Number) {
