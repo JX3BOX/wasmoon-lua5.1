@@ -47,6 +47,28 @@ export const registerNewIndexFunction = (thread: LuaThread): number => {
     return newindexPointer;
 };
 
+export const registerRedirectIndexFunction = (thread: LuaThread, target: any): number => {
+    const indexPointer = thread.luaApi.module.addFunction((L: LuaState) => {
+        const callThread = thread.stateToThread(L);
+        const key = callThread.getValue(2);
+        const value = target[key];
+        callThread.pushValue(value);
+        return 1;
+    }, 'ii');
+    return indexPointer;
+};
+
+export const registerRedirectNewIndexFunction = (thread: LuaThread, target: any): number => {
+    const newindexPointer = thread.luaApi.module.addFunction((L: LuaState) => {
+        const callThread = thread.stateToThread(L);
+        const key = callThread.getValue(2);
+        const value = callThread.getValue(3);
+        target[key] = value;
+        return LuaReturn.Ok;
+    }, 'ii');
+    return newindexPointer;
+};
+
 export const registerFuncCallFunction = (thread: LuaThread): number => {
     const callPointer = thread.luaApi.module.addFunction((L: LuaState) => {
         const callThread = thread.stateToThread(L);

@@ -5,6 +5,8 @@ import {
     registerGcFunction,
     registerIndexFunction,
     registerNewIndexFunction,
+    registerRedirectIndexFunction,
+    registerRedirectNewIndexFunction,
 } from './type-bind';
 import { PointerSize } from './definitions';
 import { version } from '../package.json';
@@ -104,29 +106,32 @@ export default class Lua {
 
     private initTypeBindings(): void {
         const gcPointer = registerGcFunction(this.global);
-        const indexPointer = registerIndexFunction(this.global);
-        const newIndexPointer = registerNewIndexFunction(this.global);
-        const funcPointer = registerFuncCallFunction(this.global);
-        const callPointer = registerCallFunction(this.global);
 
         JsType.create('js-function', (value: any) => typeof value === 'function' && !value.toString().startsWith('class'))
             .gc(gcPointer)
-            .index(indexPointer)
-            .newindex(newIndexPointer)
+            .index(registerIndexFunction(this.global))
+            .newindex(registerNewIndexFunction(this.global))
             .push(({ thread, target }) => {
                 const ref = thread.luaApi.ref(target);
                 const luaPointer = thread.luaApi.lua_newuserdata(thread.address, PointerSize);
                 thread.luaApi.module.setValue(luaPointer, ref, '*');
                 thread.luaApi.luaL_getmetatable(thread.address, 'js-function');
                 thread.luaApi.lua_setmetatable(thread.address, -2);
-                thread.luaApi.lua_pushcclosure(thread.address, funcPointer, 1);
+                thread.luaApi.lua_pushcclosure(thread.address, registerFuncCallFunction(this.global), 1);
+
+                // proxy for function, aviod `attempt to index global 'TestFunction' (a function value)`
+                thread.luaApi.lua_createtable(thread.address, 0, 0);
+                thread.luaApi.lua_pushcfunction(thread.address, registerRedirectIndexFunction(this.global, target));
+                thread.luaApi.lua_setfield(thread.address, -2, '__index');
+                thread.luaApi.lua_pushcfunction(thread.address, registerRedirectNewIndexFunction(this.global, target));
+                thread.luaApi.lua_setfield(thread.address, -2, '__newindex');
+                thread.luaApi.lua_setmetatable(thread.address, -2);
             })
-            .priority(1)
-            .apply(this.global);
+            .bind(this.global);
 
         JsType.create('js-userdata', () => true)
             .gc(gcPointer)
-            .call(callPointer)
+            .call(registerCallFunction(this.global))
             .index((target, index) => {
                 const result = target[index];
                 if (typeof result === 'function') {
@@ -138,7 +143,9 @@ export default class Lua {
             .newindex((target: any, index: any, value: any) => {
                 return (target[index] = value);
             })
-            .apply(this.global);
+            .tostring((target: any) => target.toString())
+            .priority(-1)
+            .bind(this.global);
     }
 
     // WARNING: It will not wait for open handles and can potentially cause bugs if JS code tries to reference Lua after executed
