@@ -1,4 +1,4 @@
-// TODO
+// TODO: Promise in lua is not supported yet
 
 // const { getEngine, tick } = require('./utils');
 // const jestMock = require('jest-mock');

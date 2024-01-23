@@ -153,50 +153,7 @@ export default class LuaThread {
         return this.luaApi.lua_remove(this.address, index);
     }
 
-    public pushValue(target: unknown, options: PushValueOptions = {}): void {
-        // 如果值是JsType decorate
-        if (target instanceof JsType && target.target) {
-            if (target._push) {
-                target._push({ thread: this, target: target.target, options });
-            } else {
-                if (target === undefined || target === null) {
-                    this.luaApi.lua_pushnil(this.address);
-                } else if (typeof target === 'number') {
-                    if (Number.isInteger(target)) {
-                        this.luaApi.lua_pushinteger(this.address, target);
-                    } else {
-                        this.luaApi.lua_pushnumber(this.address, target);
-                    }
-                } else if (typeof target === 'string') {
-                    this.luaApi.lua_pushstring(this.address, target);
-                } else if (typeof target === 'boolean') {
-                    this.luaApi.lua_pushboolean(this.address, target ? 1 : 0);
-                } else if (lodash.isPlainObject(target) || lodash.isArray(target)) {
-                    this.pushTable(target as Record<string | number, any>, options);
-                } else {
-                    const ref = this.luaApi.ref(target);
-                    const luaPointer = this.luaApi.lua_newuserdata(this.address, PointerSize);
-                    this.luaApi.module.setValue(luaPointer, ref, '*');
-                }
-
-                this.luaApi.lua_createtable(this.address, 0, 0);
-                target._pushMetaTable(this);
-                this.luaApi.lua_setmetatable(this.address, -2);
-            }
-            return;
-        }
-
-        // 如果值是线程
-        if (target instanceof LuaThread) {
-            const isMain = this.luaApi.lua_pushthread(target.address) === 1;
-            if (!isMain) {
-                this.luaApi.lua_xmove(target.address, this.address, 1);
-            }
-            return;
-        }
-
-        const startTop = this.getTop();
-        // js-lua 类型之间的转换
+    public pushBasicValue(target: unknown, options: PushValueOptions): boolean {
         if (target === undefined || target === null) {
             this.luaApi.lua_pushnil(this.address);
         } else if (typeof target === 'number') {
@@ -212,20 +169,54 @@ export default class LuaThread {
         } else if (lodash.isPlainObject(target) || lodash.isArray(target)) {
             this.pushTable(target as Record<string | number, any>, options);
         } else {
-            // 其他类型没有对应的lua类型，当userdata处理，找到对应js类型的metatable，绑定上
-            const type = this.types.find((t) => (t.match as (...args: any[]) => any)(target)) as JsType;
+            return false;
+        }
+        return true;
+    }
 
-            if (type._push) {
-                // 类型自定义push行为
-                type._push({ thread: this, target, options, type });
+    public pushValue(target: unknown, options: PushValueOptions = {}): void {
+        const startTop = this.getTop();
+
+        if (target instanceof JsType) {
+            // 如果值是JsType decorate, 针对这一个值设置metatable
+            if (target._push) {
+                target._push({ thread: this, target: target.target, options });
             } else {
-                // 默认push行为
-                const ref = this.luaApi.ref(target);
-                const luaPointer = this.luaApi.lua_newuserdata(this.address, PointerSize);
-                this.luaApi.module.setValue(luaPointer, ref, '*');
+                if (!this.pushBasicValue(target.target, options)) {
+                    const ref = this.luaApi.ref(target);
+                    const luaPointer = this.luaApi.lua_newuserdata(this.address, PointerSize);
+                    this.luaApi.module.setValue(luaPointer, ref, '*');
+                }
 
-                this.luaApi.luaL_getmetatable(this.address, type?._name);
+                this.luaApi.lua_createtable(this.address, 0, 0);
+                target._pushMetaTable(this);
                 this.luaApi.lua_setmetatable(this.address, -2);
+            }
+        } else if (target instanceof LuaThread) {
+            // 如果值是线程
+            const isMain = this.luaApi.lua_pushthread(target.address) === 1;
+            if (!isMain) {
+                this.luaApi.lua_xmove(target.address, this.address, 1);
+            }
+            return;
+        } else {
+            // js-lua 类型之间的转换
+            if (!this.pushBasicValue(target, options)) {
+                // 其他类型没有对应的lua类型，当userdata处理，找到对应js类型的metatable，绑定上
+                const type = this.types.find((t) => (t.match as (...args: any[]) => any)(target)) as JsType;
+
+                if (type._push) {
+                    // 类型自定义push行为
+                    type._push({ thread: this, target, options, type });
+                } else {
+                    // 默认push行为
+                    const ref = this.luaApi.ref(target);
+                    const luaPointer = this.luaApi.lua_newuserdata(this.address, PointerSize);
+                    this.luaApi.module.setValue(luaPointer, ref, '*');
+
+                    this.luaApi.luaL_getmetatable(this.address, type?._name);
+                    this.luaApi.lua_setmetatable(this.address, -2);
+                }
             }
         }
 

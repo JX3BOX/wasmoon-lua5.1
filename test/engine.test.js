@@ -436,7 +436,7 @@ describe('Engine', () => {
                 return null;
             })
             .priority(1)
-            .apply(lua.global);
+            .bind(lua.global);
 
         lua.ctx.TestClass = {
             create: (name) => new TestClass(name),
@@ -501,15 +501,15 @@ describe('Engine', () => {
     });
 
     // ?? TODO: Fix this test
-    // it('timeout blocking lua program', async () => {
-    //     const lua = await Lua.create();
-    //     lua.global.loadString(`
-    //         local i = 0
-    //         while true do i = i + 1 end
-    //     `);
+    it('timeout blocking lua program', async () => {
+        const lua = await Lua.create();
+        lua.global.loadString(`
+            local i = 0
+            while true do i = i + 1 end
+        `);
 
-    //     await expect(lua.global.run(0, { timeout: 5 })).eventually.to.be.rejectedWith('thread timeout exceeded');
-    // });
+        await expect(lua.global.run(0, { timeout: 5 })).eventually.to.be.rejectedWith('thread timeout exceeded');
+    });
 
     it('overwrite lib function', async () => {
         const lua = await Lua.create();
@@ -527,165 +527,167 @@ describe('Engine', () => {
         expect(output).to.be.equal('hello\nworld\n');
     });
 
-    // it('inject a userdata with a metatable should succeed', async () => {
-    //     const engine = await getEngine();
-    //     const obj = decorate(
-    //         {},
-    //         {
-    //             metatable: { __index: (_, k) => `Hello ${k}!` },
-    //         },
-    //     );
-    //     engine.global.set('obj', obj);
+    it('inject a userdata with a metatable should succeed', async () => {
+        const lua = await Lua.create();
+        const obj = JsType.decorate({}).index((_, k) => `Hello ${k}!`);
 
-    //     const res = await engine.doString('return obj.World');
+        lua.global.set('obj', obj);
 
-    //     expect(res).to.be.equal('Hello World!');
-    // });
+        const res = await lua.doString('return obj.World');
+        expect(res).to.be.equal('Hello World!');
+    });
 
-    // it('a userdata should be collected', async () => {
-    //     const engine = await getEngine();
-    //     const obj = {};
-    //     engine.global.set('obj', obj);
-    //     const refIndex = engine.global.lua.getLastRefIndex();
-    //     const oldRef = engine.global.lua.getRef(refIndex);
+    it('a userdata should be collected', async () => {
+        const lua = await Lua.create();
+        const obj = new Object(1);
+        lua.global.set('obj', obj);
+        const refIndex = lua.global.luaApi.getLastRefIndex();
+        const oldRef = lua.global.luaApi.getRef(refIndex);
 
-    //     await engine.doString(`
-    //     local weaktable = {}
-    //     setmetatable(weaktable, { __mode = "v" })
-    //     table.insert(weaktable, obj)
-    //     obj = nil
-    //     collectgarbage()
-    //     assert(next(weaktable) == nil)
-    // `);
+        await lua.doString(`
+            local weaktable = {}
+            setmetatable(weaktable, { __mode = "v" })
+            table.insert(weaktable, obj)
+            obj = nil
+            collectgarbage()
+            assert(next(weaktable) == nil)
+        `);
 
-    //     expect(oldRef).to.be.equal(obj);
-    //     const newRef = engine.global.lua.getRef(refIndex);
-    //     expect(newRef).to.be.equal(undefined);
-    // });
+        expect(oldRef).to.be.equal(obj);
+        const newRef = lua.global.luaApi.getRef(refIndex);
+        expect(newRef).to.be.equal(undefined);
+    });
 
-    // it('environment variables should be set', async () => {
-    //     const factory = getFactory({ TEST: 'true' });
-    //     const engine = await factory.createEngine();
+    it('environment variables should be set', async () => {
+        const lua = await Lua.create({
+            environmentVariables: {
+                TEST: 'true',
+            },
+        });
 
-    //     const testEnvVar = await engine.doString(`return os.getenv('TEST')`);
+        const testEnvVar = await lua.doString(`return os.getenv('TEST')`);
 
-    //     expect(testEnvVar).to.be.equal('true');
-    // });
+        expect(testEnvVar).to.be.equal('true');
+    });
 
-    // it('static methods should be callable on classes', async () => {
-    //     const engine = await getEngine();
-    //     engine.global.set('TestClass', TestClass);
+    it('static methods should be callable on classes', async () => {
+        const lua = await Lua.create();
 
-    //     const testHello = await engine.doString(`return TestClass.hello()`);
+        lua.ctx.TestClass = TestClass;
 
-    //     expect(testHello).to.be.equal('world');
-    // });
+        const testHello = await lua.doString(`return TestClass.hello()`);
 
-    // it('should be possible to access function properties', async () => {
-    //     const engine = await getEngine();
-    //     const testFunction = () => undefined;
-    //     testFunction.hello = 'world';
-    //     engine.global.set('TestFunction', decorateProxy(testFunction, { proxy: true }));
+        expect(testHello).to.be.equal('world');
+    });
 
-    //     const testHello = await engine.doString(`return TestFunction.hello`);
+    it('should be possible to access function properties', async () => {
+        const lua = await Lua.create();
 
-    //     expect(testHello).to.be.equal('world');
-    // });
+        const testFunction = () => undefined;
+        testFunction.hello = 'world';
+        lua.ctx.TestFunction = testFunction;
 
-    // it('throw error includes stack trace', async () => {
-    //     const engine = await getEngine();
-    //     try {
-    //         await engine.doString(`
-    //         local function a()
-    //             error("function a threw error")
-    //         end
-    //         local function b() a() end
-    //         local function c() b() end
-    //         c()
-    //     `);
-    //         throw new Error('should not be reached');
-    //     } catch (err) {
-    //         expect(err.message).to.includes('[string "..."]:3: function a threw error');
-    //         expect(err.message).to.includes('stack traceback:');
-    //         expect(err.message).to.includes(`[string "..."]:3: in upvalue 'a'`);
-    //         expect(err.message).to.includes(`[string "..."]:5: in upvalue 'b'`);
-    //         expect(err.message).to.includes(`[string "..."]:6: in local 'c'`);
-    //         expect(err.message).to.includes(`[string "..."]:7: in main chunk`);
-    //     }
-    // });
+        const testHello = await lua.doString(`return TestFunction.hello`);
 
-    // it('should get only the last result on run', async () => {
-    //     const engine = await getEngine();
+        expect(testHello).to.be.equal('world');
+    });
 
-    //     const a = await engine.doString(`return 1`);
-    //     const b = await engine.doString(`return 3`);
-    //     const c = engine.doStringSync(`return 2`);
-    //     const d = engine.doStringSync(`return 5`);
+    it('throw error includes stack trace', async () => {
+        const lua = await Lua.create();
+        try {
+            await lua.doString(`
+                local function a()
+                    error("function a threw error")
+                end
+                local function b() a() end
+                local function c() b() end
+                c()
+            `);
+            throw new Error('should not be reached');
+        } catch (err) {
+            expect(err.message).to.includes('[string "..."]:3: function a threw error');
+            // TODO: stack traceback
+            // expect(err.message).to.includes('stack traceback:');
+            // expect(err.message).to.includes(`[string "..."]:3: in upvalue 'a'`);
+            // expect(err.message).to.includes(`[string "..."]:5: in upvalue 'b'`);
+            // expect(err.message).to.includes(`[string "..."]:6: in local 'c'`);
+            // expect(err.message).to.includes(`[string "..."]:7: in main chunk`);
+        }
+    });
 
-    //     expect(a).to.be.equal(1);
-    //     expect(b).to.be.equal(3);
-    //     expect(c).to.be.equal(2);
-    //     expect(d).to.be.equal(5);
-    // });
+    it('should get only the last result on run', async () => {
+        const lua = await Lua.create();
 
-    // it('should get only the return values on call function', async () => {
-    //     const engine = await getEngine();
-    //     engine.global.set('hello', (name) => `Hello ${name}!`);
+        const a = await lua.doString(`return 1`);
+        const b = await lua.doString(`return 3`);
+        const c = lua.doStringSync(`return 2`);
+        const d = lua.doStringSync(`return 5`);
 
-    //     const a = await engine.doString(`return 1`);
-    //     const b = engine.doStringSync(`return 5`);
-    //     const values = engine.global.call('hello', 'joao');
+        expect(a).to.be.equal(1);
+        expect(b).to.be.equal(3);
+        expect(c).to.be.equal(2);
+        expect(d).to.be.equal(5);
+    });
 
-    //     expect(a).to.be.equal(1);
-    //     expect(b).to.be.equal(5);
-    //     expect(values).to.have.length(1);
-    //     expect(values[0]).to.be.equal('Hello joao!');
-    // });
+    it('should get only the return values on call function', async () => {
+        const lua = await Lua.create();
+        lua.global.set('hello', (name) => `Hello ${name}!`);
 
-    // it('create a large string variable should succeed', async () => {
-    //     const engine = await getEngine();
-    //     const str = 'a'.repeat(1000000);
+        const a = await lua.doString(`return 1`);
+        const b = lua.doStringSync(`return 5`);
+        const values = lua.global.call('hello', 'joao');
 
-    //     engine.global.set('str', str);
+        expect(a).to.be.equal(1);
+        expect(b).to.be.equal(5);
+        expect(values).to.have.length(1);
+        expect(values[0]).to.be.equal('Hello joao!');
+    });
 
-    //     const res = await engine.doString('return str');
+    it('create a large string variable should succeed', async () => {
+        const lua = await Lua.create();
+        const str = 'a'.repeat(1000000);
 
-    //     expect(res).to.be.equal(str);
-    // });
+        lua.ctx.str = str;
 
-    // it('execute a large string should succeed', async () => {
-    //     const engine = await getEngine();
-    //     const str = 'a'.repeat(1000000);
+        const res = await lua.doString('return str');
 
-    //     const res = await engine.doString(`return [[${str}]]`);
+        expect(res).to.be.equal(str);
+    });
 
-    //     expect(res).to.be.equal(str);
-    // });
+    it('execute a large string should succeed', async () => {
+        const lua = await Lua.create();
+        const str = 'a'.repeat(1000000);
 
-    // it('negative integers should be pushed and retrieved as string', async () => {
-    //     const engine = await getEngine();
-    //     engine.global.set('value', -1);
+        const res = await lua.doString(`return [[${str}]]`);
 
-    //     const res = await engine.doString(`return tostring(value)`);
+        expect(res).to.be.equal(str);
+    });
 
-    //     expect(res).to.be.equal('-1');
-    // });
+    it('negative integers should be pushed and retrieved as string', async () => {
+        const lua = await Lua.create();
 
-    // it('negative integers should be pushed and retrieved as number', async () => {
-    //     const engine = await getEngine();
-    //     engine.global.set('value', -1);
+        lua.ctx.value = -1;
+        const res = await lua.doString(`return tostring(value)`);
 
-    //     const res = await engine.doString(`return value`);
+        expect(res).to.be.equal('-1');
+    });
 
-    //     expect(res).to.be.equal(-1);
-    // });
+    it('negative integers should be pushed and retrieved as number', async () => {
+        const lua = await Lua.create();
 
+        lua.ctx.value = -1;
+        const res = await lua.doString(`return value`);
+
+        expect(res).to.be.equal(-1);
+    });
+
+    // lua5.1 does not support 64 bit integers
     // it('number greater than 32 bit int should be pushed and retrieved as string', async () => {
-    //     const engine = await getEngine();
-    //     const value = 1689031554550;
-    //     engine.global.set('value', value);
+    //     const lua = await Lua.create();
 
-    //     const res = await engine.doString(`return tostring(value)`);
+    //     const value = 1689031554550;
+    //     lua.ctx.value = value;
+    //     const res = await lua.doString(`return tostring(value)`);
 
     //     expect(res).to.be.equal(`${String(value)}`);
     // });
@@ -710,25 +712,26 @@ describe('Engine', () => {
     //     expect(res).to.be.equal('1689031554550');
     // });
 
+    // TODO: Promise in lua is not supported yet
     // it('yielding in a JS callback into Lua does not break lua state', async () => {
     //     // When yielding within a callback the error 'attempt to yield across a C-call boundary'.
     //     // This test just checks that throwing that error still allows the lua global to be
     //     // re-used and doesn't cause JS to abort or some nonsense.
-    //     const engine = await getEngine();
+    //     const lua = await Lua.create();
     //     const testEmitter = new EventEmitter();
-    //     engine.global.set('yield', () => new Promise((resolve) => testEmitter.once('resolve', resolve)));
-    //     const resPromise = engine.doString(`
-    //     local res = yield():next(function ()
-    //         coroutine.yield()
-    //         return 15
-    //     end)
-    //     print("res", res:await())
-    //   `);
+    //     lua.ctx.yield = () => new Promise((resolve) => testEmitter.once('resolve', resolve));
+    //     const resPromise = lua.doString(`
+    //         local res = yield():next(function ()
+    //             coroutine.yield()
+    //             return 15
+    //         end)
+    //         print("res", res:await())
+    //     `);
 
     //     testEmitter.emit('resolve');
     //     await expect(resPromise).to.eventually.be.rejectedWith('Error: attempt to yield across a C-call boundary');
 
-    //     expect(await engine.doString(`return 42`)).to.equal(42);
+    //     expect(await lua.doString(`return 42`)).to.equal(42);
     // });
 
     // it('forced yield within JS callback from Lua doesnt cause vm to crash', async () => {
@@ -760,17 +763,22 @@ describe('Engine', () => {
     //     await expect(thread.run(0, { timeout: 5 })).to.eventually.be.rejectedWith('thread timeout exceeded');
     // });
 
-    // it('null injected and valid', async () => {
-    //     const lua = await Lua.create();
-    //     lua.global.loadString(`
-    //         local args = { ... }
-    //         assert(args[1] == null, string.format("expected first argument to be null, got %s", tostring(args[1])))
-    //         return null, args[1], tostring(null)
-    //     `);
-    //     lua.global.pushValue(null);
-    //     const res = await lua.global.run(1);
-    //     expect(res).to.deep.equal([null, null, 'null']);
-    // });
+    // is null necessary ?
+    it('null injected and valid', async () => {
+        const lua = await Lua.create();
+
+        lua.ctx.null = JsType.decorate(null).tostring(() => 'null');
+
+        lua.global.loadString(`
+            local args = { ... }
+            print(args[1])
+            assert(args[1] == null, string.format("expected first argument to be null, got %s", tostring(args[1])))
+            return null, args[1], tostring(null)
+        `);
+        lua.global.pushValue(null);
+        const res = await lua.global.run(1);
+        expect(res).to.deep.equal([null, null, 'null']);
+    });
 
     it('Nested callback from JS to Lua', async () => {
         const lua = await Lua.create();

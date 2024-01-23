@@ -5,5 +5,5 @@ export { default as LuaMultiReturn } from './multireturn';
 // use the bindings rather than the wrappers.
 export { default as LuaApi } from './api';
 export { default as Lua } from './lua';
-export { JsType } from './type-bind';
+export * from './type-bind';
 export * from './definitions';
