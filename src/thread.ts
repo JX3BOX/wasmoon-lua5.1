@@ -67,7 +67,6 @@ export default class LuaThread {
 
                 resumeResult = this.resume(0);
             }
-
             // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
             this.assertOk(resumeResult.result);
             return this.getStackValues();
@@ -155,6 +154,38 @@ export default class LuaThread {
     }
 
     public pushValue(target: unknown, options: PushValueOptions = {}): void {
+        // 如果值是JsType decorate
+        if (target instanceof JsType && target.target) {
+            if (target._push) {
+                target._push({ thread: this, target: target.target, options });
+            } else {
+                if (target === undefined || target === null) {
+                    this.luaApi.lua_pushnil(this.address);
+                } else if (typeof target === 'number') {
+                    if (Number.isInteger(target)) {
+                        this.luaApi.lua_pushinteger(this.address, target);
+                    } else {
+                        this.luaApi.lua_pushnumber(this.address, target);
+                    }
+                } else if (typeof target === 'string') {
+                    this.luaApi.lua_pushstring(this.address, target);
+                } else if (typeof target === 'boolean') {
+                    this.luaApi.lua_pushboolean(this.address, target ? 1 : 0);
+                } else if (lodash.isPlainObject(target) || lodash.isArray(target)) {
+                    this.pushTable(target as Record<string | number, any>, options);
+                } else {
+                    const ref = this.luaApi.ref(target);
+                    const luaPointer = this.luaApi.lua_newuserdata(this.address, PointerSize);
+                    this.luaApi.module.setValue(luaPointer, ref, '*');
+                }
+
+                this.luaApi.lua_createtable(this.address, 0, 0);
+                target._pushMetaTable(this);
+                this.luaApi.lua_setmetatable(this.address, -2);
+            }
+            return;
+        }
+
         // 如果值是线程
         if (target instanceof LuaThread) {
             const isMain = this.luaApi.lua_pushthread(target.address) === 1;
@@ -182,10 +213,11 @@ export default class LuaThread {
             this.pushTable(target as Record<string | number, any>, options);
         } else {
             // 其他类型没有对应的lua类型，当userdata处理，找到对应js类型的metatable，绑定上
-            const type = this.types.find((t) => t.match(target)) as JsType;
+            const type = this.types.find((t) => (t.match as (...args: any[]) => any)(target)) as JsType;
+
             if (type._push) {
                 // 类型自定义push行为
-                type._push({ thread: this, target, options });
+                type._push({ thread: this, target, options, type });
             } else {
                 // 默认push行为
                 const ref = this.luaApi.ref(target);
@@ -421,7 +453,7 @@ export default class LuaThread {
         if (result !== LuaReturn.Ok && result !== LuaReturn.Yield) {
             const resultString = LuaReturn[result];
             // This is the default message if there's nothing on the stack.
-            const error = new Error(`Lua Error(${resultString}/${result})`);
+            let error = new Error(`Lua Error(${resultString}/${result})`);
             if (this.getTop() > 0) {
                 if (result === LuaReturn.ErrorMem) {
                     // If there's no memory just do a normal to string.
@@ -429,28 +461,12 @@ export default class LuaThread {
                 } else {
                     const luaError = this.getValue(-1);
                     if (luaError instanceof Error) {
-                        error.stack = luaError.stack;
+                        error = luaError;
+                    } else {
+                        error.message = this.indexToString(-1);
                     }
-
-                    // Calls __tostring if it exists and pushes onto the stack.
-                    error.message = this.indexToString(-1);
                 }
             }
-
-            // Also attempt to get a traceback
-            // lua5.1 doesn't have luaL_traceback
-            // if (result !== LuaReturn.ErrorMem) {
-            //     try {
-            //         this.luaApi.luaL_traceback(this.address, this.address, null, 1)
-            //         const traceback = this.luaApi.lua_tolstring(this.address, -1, null)
-            //         if (traceback.trim() !== 'stack traceback:') {
-            //             error.message = `${error.message}\n${traceback}`
-            //         }
-            //         this.pop(1) // pop stack trace.
-            //     } catch (err) {
-            //         console.warn('Failed to generate stack trace', err)
-            //     }
-            // }
 
             throw error;
         }

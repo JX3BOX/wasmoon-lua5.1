@@ -7,6 +7,7 @@ declare interface PushParams {
     options?: PushValueOptions;
     thread: LuaThread;
     target: any;
+    type?: JsType;
 }
 
 export const registerGcFunction = (thread: LuaThread): number => {
@@ -108,37 +109,46 @@ export class JsType {
         return new JsType(name, is);
     }
 
-    public match: CheckTypeFunction;
+    static decorate(target: any): JsType {
+        const jsType = new JsType();
+        jsType.target = target;
+        return jsType;
+    }
+
+    public match: CheckTypeFunction | undefined;
     public _priority: number = 0;
     public _push?: (params: PushParams) => void;
+    public target?: any;
 
     // metatable
-    public _name: string;
+    public _name: string | null = null;
     public _gc?: number;
     public _call?: number;
     public _metatable?: number | string;
-    public _tostring?: number | string;
-    public _add?: number | ((a: any, b: any) => any);
-    public _sub?: number;
-    public _mul?: number;
-    public _div?: number;
-    public _mod?: number;
-    public _pow?: number;
-    public _unm?: number;
+    public _tostring?: number | string | ((...args: any[]) => any);
+    public _add?: number | ((...args: any[]) => any);
+    public _sub?: number | ((...args: any[]) => any);
+    public _mul?: number | ((...args: any[]) => any);
+    public _div?: number | ((...args: any[]) => any);
+    public _mod?: number | ((...args: any[]) => any);
+    public _pow?: number | ((...args: any[]) => any);
+    public _unm?: number | ((...args: any[]) => any);
+    public _concat?: number | ((...args: any[]) => any);
+    public _len?: number | ((...args: any[]) => any);
+    public _eq?: number | ((...args: any[]) => any);
+    public _lt?: number | ((...args: any[]) => any);
+    public _le?: number | ((...args: any[]) => any);
     public _index?: number | Record<any, any> | ((...args: any[]) => any);
-    public _newindex?: number | Record<any, any>;
+    public _newindex?: number | Record<any, any> | ((...args: any[]) => any);
 
     [key: string]: any;
 
-    constructor(name: string, is: CheckTypeFunction) {
-        this._name = name;
+    constructor(name?: string, is?: CheckTypeFunction) {
+        this._name = name ?? null;
         this.match = is;
     }
 
-    apply(thread: LuaThread): void {
-        thread.luaApi.luaL_newmetatable(thread.address, this._name);
-        thread.luaApi.lua_pushstring(thread.address, this._name);
-        thread.luaApi.lua_setfield(thread.address, -2, '__name');
+    _pushMetaTable(thread: LuaThread): void {
         if (this._gc) {
             thread.luaApi.lua_pushcfunction(thread.address, this._gc);
             thread.luaApi.lua_setfield(thread.address, -2, '__gc');
@@ -147,72 +157,46 @@ export class JsType {
             thread.luaApi.lua_pushcfunction(thread.address, this._call);
             thread.luaApi.lua_setfield(thread.address, -2, '__call');
         }
-        if (this._metatable) {
-            if (typeof this._metatable === 'number') {
-                thread.luaApi.lua_pushcfunction(thread.address, this._metatable);
-            } else {
-                thread.pushValue(this._metatable);
-            }
-            thread.luaApi.lua_setfield(thread.address, -2, '__metatable');
-        }
-        if (this._tostring) {
-            if (typeof this._tostring === 'number') {
-                thread.luaApi.lua_pushcfunction(thread.address, this._tostring);
-            } else {
-                thread.pushValue(this._tostring);
-            }
-            thread.luaApi.lua_setfield(thread.address, -2, '__tostring');
-        }
-        if (this._add) {
-            if (typeof this._add === 'number') {
-                thread.luaApi.lua_pushcfunction(thread.address, this._add);
-            } //else {
-            //     thread.pushValue(this._add);
-            // }
-            thread.luaApi.lua_setfield(thread.address, -2, '__add');
-        }
-        if (this._sub) {
-            thread.luaApi.lua_pushcfunction(thread.address, this._sub);
-            thread.luaApi.lua_setfield(thread.address, -2, '__sub');
-        }
-        if (this._mul) {
-            thread.luaApi.lua_pushcfunction(thread.address, this._mul);
-            thread.luaApi.lua_setfield(thread.address, -2, '__mul');
-        }
-        if (this._div) {
-            thread.luaApi.lua_pushcfunction(thread.address, this._div);
-            thread.luaApi.lua_setfield(thread.address, -2, '__div');
-        }
-        if (this._mod) {
-            thread.luaApi.lua_pushcfunction(thread.address, this._mod);
-            thread.luaApi.lua_setfield(thread.address, -2, '__mod');
-        }
-        if (this._pow) {
-            thread.luaApi.lua_pushcfunction(thread.address, this._pow);
-            thread.luaApi.lua_setfield(thread.address, -2, '__pow');
-        }
-        if (this._unm) {
-            thread.luaApi.lua_pushcfunction(thread.address, this._unm);
-            thread.luaApi.lua_setfield(thread.address, -2, '__unm');
-        }
-        if (this._index) {
-            if (typeof this._index === 'number') {
-                thread.luaApi.lua_pushcfunction(thread.address, this._index);
-            } else {
-                thread.pushValue(this._index);
-            }
-            thread.luaApi.lua_setfield(thread.address, -2, '__index');
-        }
-        if (this._newindex) {
-            if (typeof this._newindex === 'number') {
-                thread.luaApi.lua_pushcfunction(thread.address, this._newindex);
-            } else {
-                thread.pushValue(this._newindex);
-            }
-            thread.luaApi.lua_setfield(thread.address, -2, '__newindex');
-        }
-        thread.luaApi.lua_pop(thread.address, 1);
 
+        const ops = [
+            'add',
+            'sub',
+            'mul',
+            'div',
+            'mod',
+            'pow',
+            'unm',
+            'concat',
+            'len',
+            'eq',
+            'lt',
+            'le',
+            'index',
+            'newindex',
+            'metatable',
+            'tostring',
+        ];
+        for (const op of ops) {
+            if (this[`_${op}`]) {
+                const target = this[`_${op}`];
+                if (typeof target === 'number') {
+                    thread.luaApi.lua_pushcfunction(thread.address, target);
+                } else {
+                    thread.pushValue(this[`_${op}`]);
+                }
+                thread.luaApi.lua_setfield(thread.address, -2, `__${op}`);
+            }
+        }
+    }
+
+    bind(thread: LuaThread): void {
+        thread.luaApi.luaL_newmetatable(thread.address, this._name);
+        thread.luaApi.lua_pushstring(thread.address, this._name);
+        thread.luaApi.lua_setfield(thread.address, -2, '__name');
+
+        this._pushMetaTable(thread);
+
+        thread.luaApi.lua_pop(thread.address, 1);
         thread.bindType(this);
     }
 
@@ -246,7 +230,7 @@ export class JsType {
         return this;
     }
 
-    tostring(value: number | string): JsType {
+    tostring(value: number | string | ((...args: any[]) => any)): JsType {
         this._tostring = value;
         return this;
     }
