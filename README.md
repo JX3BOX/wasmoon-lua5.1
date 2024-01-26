@@ -23,12 +23,11 @@ To initialize, create a new Lua state, register the standard library, set a glob
 ```js
 const { Lua } = require('wasmoon-lua5.1');
 
-// Initialize a new lua environment factory
-// You can pass the wasm location as the first argument, useful if you are using wasmoon on a web environment and want to host the file by yourself
+// create lua global (also a wasm instance)
 const lua = await Lua.create();
-// Create a standalone lua environment from the factory
 
 try {
+    // get context, a proxy. It will be used to interact with lua conveniently
     const ctx = lua.ctx;
     ctx.add = (a, b) => a + b;
     console.log(ctx.add(114514, 1919810));
