@@ -7,11 +7,15 @@ const production = !process.env.ROLLUP_WATCH;
 
 export default {
     input: './src/index.ts',
+    external: ['lodash', 'module'],
     output: {
         file: 'dist/index.js',
         format: 'umd',
         name: 'wasmoon',
         sourcemap: !production,
+        globals: {
+            lodash: 'lodash',
+        },
     },
     plugins: [
         {
@@ -32,7 +36,10 @@ export default {
             outputToFilesystem: true,
         }),
         copy({
-            targets: [{ src: 'build/liblua5.1.wasm', dest: 'dist' }],
+            targets: [
+                { src: 'build/liblua5.1.wasm', dest: 'dist' },
+                { src: 'src/types.d.ts', dest: 'dist' },
+            ],
         }),
         json(),
     ],
