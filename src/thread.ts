@@ -263,7 +263,7 @@ export default class LuaThread {
 
         try {
             for (const key of arrIndexs) {
-                this.pushValue(key + 1, options);
+                this.pushValue(key, options);
                 this.pushValue(object[key], options);
                 this.luaApi.lua_settable(this.address, -3);
             }
@@ -358,11 +358,7 @@ export default class LuaThread {
             const key = this.getValue(-2, { refs: options.refs });
             const value = this.getValue(-1, { refs: options.refs });
 
-            if (typeof key === 'number') {
-                table.set(key - 1, value);
-            } else {
-                table.set(key, value);
-            }
+            table.set(key, value);
             this.pop();
         }
 
