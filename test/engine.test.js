@@ -1,3 +1,4 @@
+/* eslint-disable no-sparse-arrays */
 const { JsType, LuaThread, LuaType, LuaReturn } = require('../dist/index');
 const { expect } = require('chai');
 // const { getEngine, getFactory } = require('./utils');
@@ -104,16 +105,15 @@ describe('Engine', () => {
             return { obj1 = obj1, obj2 }
         `);
 
-        const obj = [[5]];
-        obj[0]['hello'] = 'everybody';
-        obj[0]['array'] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
-        obj[0]['fn'] = value[0]['fn'];
+        const obj = [, [, 5]];
+        obj[1]['hello'] = 'everybody';
+        obj[1]['array'] = [, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+        obj[1]['fn'] = value[1]['fn'];
         obj['obj1'] = {
             hello: 'world',
         };
         obj['obj1'].self = obj['obj1'];
-        obj[0].self = obj[0];
-
+        obj[1].self = obj[1];
         expect(value).to.deep.eql(obj);
     });
 
@@ -128,7 +128,7 @@ describe('Engine', () => {
             return obj
         `);
 
-        const arr = ['hello', 'world'];
+        const arr = [undefined, 'hello', 'world'];
         arr.push(arr);
         expect(value).to.be.eql(arr);
     });
@@ -232,7 +232,7 @@ describe('Engine', () => {
             end
         `);
 
-        expect(sum([10, 50, 25])).to.be.equal(85);
+        expect(sum([undefined, 10, 50, 25])).to.be.equal(85);
     });
 
     it('call a global function with multiple returns should succeed', async () => {
