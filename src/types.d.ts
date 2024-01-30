@@ -48,4 +48,7 @@ declare interface PushValueOptions {
 declare interface GetValueOptions {
     refs?: Map<number, any>;
     type?: LuaType;
+
+    // used for table
+    dictType?: DictType;
 }

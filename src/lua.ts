@@ -42,6 +42,10 @@ export default class Lua {
 
     // 构造方法
     constructor(luaApi: LuaApi, options: LuaCreateOptions) {
+        if (!options) {
+            // 必须通过静态方法创建，不允许直接new
+            throw new Error('Lua.create(options) must be used to create a Lua instance');
+        }
         this.luaApi = luaApi;
         this.global = new LuaGlobal(this.luaApi, options.traceAllocations);
 

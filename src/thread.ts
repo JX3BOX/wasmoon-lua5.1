@@ -1,7 +1,7 @@
 import * as lodash from 'lodash';
+import { DictType, mapTransform } from './utils/map-transform';
 import { JsType } from './type-bind';
 import { LUA_MULTRET, LUA_REGISTRYINDEX, LuaEventMasks, LuaReturn, LuaTimeoutError, LuaType, PointerSize } from './definitions';
-import { mapTransform } from './utils/map';
 import MultiReturn from './multireturn';
 import Pointer from './utils/pointer';
 import type LuaApi from './api';
@@ -339,8 +339,10 @@ export default class LuaThread {
 
     // lua的table太奔放了 甚至键可以是自身 js里可以匹配的数据结构只有Map
     public getTable(index: number, options: GetValueOptions = {}): Record<string | number, any> {
-        const table = new Map();
         const needTransform = !options.refs;
+        const dictType = options.dictType as DictType;
+
+        const table = new Map();
         if (!options.refs) {
             options.refs = new Map<number, any>();
         }
@@ -361,8 +363,7 @@ export default class LuaThread {
             table.set(key, value);
             this.pop();
         }
-
-        return needTransform ? mapTransform(table) : table;
+        return needTransform ? mapTransform(table, { dictType }) : table;
     }
 
     public call(name: string, ...args: any[]): MultiReturn {
