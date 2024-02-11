@@ -1,7 +1,7 @@
 import * as lodash from 'lodash';
-import { DictType, mapTransform } from './utils/map-transform';
 import { JsType } from './type-bind';
 import { LUA_MULTRET, LUA_REGISTRYINDEX, LuaEventMasks, LuaReturn, LuaType, PointerSize } from './definitions';
+import { getTableProxy } from './table';
 import MultiReturn from './multireturn';
 import Pointer from './utils/pointer';
 import type LuaApi from './api';
@@ -151,6 +151,11 @@ export default class LuaThread {
 
     public remove(index: number): void {
         return this.luaApi.lua_remove(this.address, index);
+    }
+
+    public isBasicValue(index: number): boolean {
+        const type = this.luaApi.lua_type(this.address, index);
+        return [LuaType.Nil, LuaType.Boolean, LuaType.Number, LuaType.String].includes(type);
     }
 
     public pushBasicValue(target: unknown, options: PushValueOptions): boolean {
@@ -306,18 +311,24 @@ export default class LuaThread {
         }
     }
 
+    // TODO: 如果lua的某个函数被gc了，并且pointer位置被其他函数占用，这里会有问题。需要写一个gc函数，当内存位置gc的时候删掉luaApi funcRefs里的引用。
     public getFunction(index: number): (...args: any[]) => any {
         this.luaApi.lua_pushvalue(this.address, index);
-        const func = this.luaApi.luaL_ref(this.address, LUA_REGISTRYINDEX);
+        const funcRef = this.luaApi.luaL_ref(this.address, LUA_REGISTRYINDEX);
+        const pointer = this.luaApi.lua_topointer(this.address, index);
 
-        return (...args: any[]): any => {
+        if (this.luaApi.funcRefs.has(pointer)) {
+            return this.luaApi.funcRefs.get(pointer) as (...args: any[]) => any;
+        }
+
+        const func = (...args: any[]): any => {
             if (this.isClosed()) {
                 console.warn('Tried to call a function after closing lua state');
                 return;
             }
 
             const thread = this.newThread();
-            thread.luaApi.lua_rawgeti(thread.address, LUA_REGISTRYINDEX, func);
+            thread.luaApi.lua_rawgeti(thread.address, LUA_REGISTRYINDEX, funcRef);
             try {
                 for (const arg of args) {
                     thread.pushValue(arg);
@@ -335,14 +346,22 @@ export default class LuaThread {
                 thread.close();
             }
         };
+
+        this.luaApi.funcRefs.set(pointer, func);
+        return func;
     }
 
-    // lua的table太奔放了 甚至键可以是自身 js里可以匹配的数据结构只有Map
     public getTable(index: number, options: GetValueOptions = {}): Record<string | number, any> {
-        const needTransform = !options.refs;
-        const dictType = options.dictType as DictType;
+        const ref = this.luaApi.luaL_ref(this.address, LUA_REGISTRYINDEX);
+        this.luaApi.lua_rawgeti(this.address, LUA_REGISTRYINDEX, ref);
 
-        const table = new Map();
+        const table = getTableProxy(
+            {
+                map: new Map(),
+                ref: ref,
+            },
+            this,
+        );
         if (!options.refs) {
             options.refs = new Map<number, any>();
         }
@@ -360,10 +379,11 @@ export default class LuaThread {
             const key = this.getValue(-2, { refs: options.refs });
             const value = this.getValue(-1, { refs: options.refs });
 
-            table.set(key, value);
+            table.$set(key, value);
             this.pop();
         }
-        return needTransform ? mapTransform(table, { dictType }) : table;
+
+        return table;
     }
 
     public call(name: string, ...args: any[]): MultiReturn {
