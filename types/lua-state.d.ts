@@ -43,3 +43,13 @@ declare interface JsTypeDefinition {
     match: (value: any) => boolean;
     push_metatable: () => boolean;
 }
+
+declare interface LuaTable {
+    map: Map<any, any>;
+    ref: number;
+    [key: any]: any;
+    $get: (key: any) => any;
+    $set: (key: any, value: any) => void;
+    $detach: (key: any) => Map<any, any>;
+    [Symbol.iterator]: () => Iterator<T>;
+}
