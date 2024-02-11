@@ -1,4 +1,16 @@
 {
     "editor.formatOnSave": true,
-    "files.insertFinalNewline": true
+    "files.insertFinalNewline": true,
+    "cSpell.words": [
+        "createtable",
+        "getmetatable",
+        "newindex",
+        "newuserdata",
+        "openlibs",
+        "pushcclosure",
+        "pushcfunction",
+        "setfield",
+        "setmetatable",
+        "xmove"
+    ]
 }

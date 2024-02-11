@@ -88,6 +88,10 @@ export default class Lua {
         this.luaApi.module.FS.writeFile(path, content);
     }
 
+    public unmountFile(path: string): void {
+        this.luaApi.module.FS.unlink(path);
+    }
+
     public doString(script: string): Promise<any> {
         return this.callByteCode((thread) => thread.loadString(script));
     }
@@ -123,7 +127,7 @@ export default class Lua {
                 thread.luaApi.lua_setmetatable(thread.address, -2);
                 thread.luaApi.lua_pushcclosure(thread.address, registerFuncCallFunction(this.global), 1);
 
-                // proxy for function, aviod `attempt to index global 'TestFunction' (a function value)`
+                // proxy for function, avoid `attempt to index global 'TestFunction' (a function value)`
                 thread.luaApi.lua_createtable(thread.address, 0, 0);
                 thread.luaApi.lua_pushcfunction(thread.address, registerRedirectIndexFunction(this.global, target));
                 thread.luaApi.lua_setfield(thread.address, -2, '__index');
@@ -163,7 +167,7 @@ export default class Lua {
                 // Move all stack results to the global state to avoid referencing the thread values
                 // which will be cleaned up in the finally below.
                 this.luaApi.lua_xmove(thread.address, this.global.address, result.length);
-                // The shenanigans here are to return the first reuslt value on the stack.
+                // The shenanigans here are to return the first result value on the stack.
                 // Say there's 2 values at stack indexes 1 and 2. Then top is 2, result.length is 2.
                 // That's why there's a + 1 sitting at the end.
                 return this.global.getValue(this.global.getTop() - result.length + 1);

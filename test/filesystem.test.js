@@ -59,4 +59,12 @@ describe('Filesystem', () => {
         const value = await lua.doFile('init.lua');
         expect(value).to.be.equal(content);
     });
+
+    it('unmount a file and require it should throw', async () => {
+        const lua = await Lua.create();
+        lua.mountFile('init.lua', `return 42`);
+        lua.unmountFile('init.lua');
+
+        await expect(lua.doString('require("init")')).to.eventually.be.rejected;
+    });
 });
