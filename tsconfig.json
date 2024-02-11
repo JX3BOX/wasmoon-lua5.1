@@ -20,6 +20,6 @@
         "noUnusedParameters": true,
         "noUnusedLocals": true
     },
-    "include": ["src/**/*", "bench/**/*", "test/**/*"],
+    "include": ["src/**/*", "bench/**/*", "test/**/*", "types/**/*.d.ts"],
     "exclude": ["node_modules"]
 }

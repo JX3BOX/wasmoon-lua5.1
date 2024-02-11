@@ -2,11 +2,6 @@ import { LuaLibraries } from './definitions';
 import LuaThread from './thread';
 import type LuaApi from './api';
 
-interface LuaMemoryStats {
-    memoryUsed: number;
-    memoryMax?: number;
-}
-
 export default class LuaGlobal extends LuaThread {
     private memoryStats: LuaMemoryStats | undefined;
     private allocatorFunctionPointer: number | undefined;

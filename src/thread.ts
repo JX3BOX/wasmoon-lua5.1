@@ -1,7 +1,7 @@
 import * as lodash from 'lodash';
 import { DictType, mapTransform } from './utils/map-transform';
 import { JsType } from './type-bind';
-import { LUA_MULTRET, LUA_REGISTRYINDEX, LuaEventMasks, LuaReturn, LuaTimeoutError, LuaType, PointerSize } from './definitions';
+import { LUA_MULTRET, LUA_REGISTRYINDEX, LuaEventMasks, LuaReturn, LuaType, PointerSize } from './definitions';
 import MultiReturn from './multireturn';
 import Pointer from './utils/pointer';
 import type LuaApi from './api';
@@ -11,11 +11,11 @@ const INSTRUCTION_HOOK_COUNT = 1000;
 
 export default class LuaThread {
     public readonly address: LuaState;
-    public readonly luaApi: LuaApi;
+    public luaApi: LuaApi;
     private closed = false;
     private hookFunctionPointer: number | undefined;
     private timeout?: number;
-    private readonly parent?: LuaThread;
+    private parent?: LuaThread;
     private types: JsType[] = [];
 
     public constructor(luaApi: LuaApi, address: LuaState, parent?: LuaThread) {
@@ -47,7 +47,7 @@ export default class LuaThread {
                     if (resumeResult.resultCount > 0) {
                         this.pop(resumeResult.resultCount);
                     }
-                    throw new LuaTimeoutError(`thread timeout exceeded`);
+                    throw new Error(`thread timeout exceeded`);
                 }
                 if (resumeResult.resultCount > 0) {
                     const lastValue = this.getValue(-1);
@@ -117,7 +117,7 @@ export default class LuaThread {
             if (!this.hookFunctionPointer) {
                 this.hookFunctionPointer = this.luaApi.module.addFunction((): void => {
                     if (Date.now() > timeout) {
-                        this.pushValue(new LuaTimeoutError(`thread timeout exceeded`));
+                        this.pushValue(new Error(`thread timeout exceeded`));
                         this.luaApi.lua_error(this.address);
                     }
                 }, 'vii');

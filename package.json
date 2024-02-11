@@ -3,6 +3,7 @@
     "version": "1.17.2",
     "description": "A real lua 5.1 VM with JS bindings made with webassembly",
     "main": "dist/index.js",
+    "types": "dist/index.d.ts",
     "scripts": {
         "build:wasm:dev": "./build.sh dev",
         "build:wasm": "./build.sh",
@@ -11,7 +12,7 @@
         "start": "rollup -c -w",
         "test": "mocha --parallel --require ./test/boot.js test/*.test.js",
         "luatests": "node --experimental-import-meta-resolve test/luatests.mjs",
-        "build": "rollup -c && tsc -d --emitDeclarationOnly --rootDir src --declarationDir dist",
+        "build": "rollup -c",
         "clean": "rm -rf dist build",
         "lint": "prettier --write . && eslint . --fix --cache",
         "lint:nofix": "eslint ."
@@ -36,13 +37,13 @@
     "keywords": [
         "lua",
         "lua5.1",
-        "lua-bindlings",
+        "lua-bindings",
         "wasm",
         "webassembly"
     ],
     "devDependencies": {
         "@rollup/plugin-json": "^6.1.0",
-        "@rollup/plugin-typescript": "11.1.5",
+        "@rollup/plugin-typescript": "^11.1.6",
         "@types/lodash": "^4.14.202",
         "@types/node": "20.10.4",
         "@typescript-eslint/eslint-plugin": "6.13.2",
@@ -57,8 +58,9 @@
         "jest-mock": "29.7.0",
         "mocha": "10.2.0",
         "prettier": "3.1.0",
-        "rollup": "4.7.0",
+        "rollup": "4.10.0",
         "rollup-plugin-copy": "3.5.0",
+        "rollup-plugin-dts": "^6.1.0",
         "tslib": "2.6.2",
         "typescript": "^5.3.3"
     },
