@@ -156,7 +156,7 @@ export default class LuaApi {
     public luaopen_debug: (L: LuaState) => number;
     public luaopen_package: (L: LuaState) => number;
 
-    public funcRefs = new Map<number, Function>();
+    public pointerRefs = new Map<number, any>();
     public referenceTracker = new WeakMap<any, ReferenceMetadata>();
     public referenceMap = new Map<number, any>();
     public availableReferences: number[] = [];

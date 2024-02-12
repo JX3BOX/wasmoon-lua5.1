@@ -73,7 +73,6 @@ export const registerFuncCallFunction = (thread: LuaThread): number => {
     const callPointer = thread.luaApi.module.addFunction((L: LuaState) => {
         const callThread = thread.stateToThread(L);
         const top = callThread.getTop();
-
         const args = [];
         for (let i = 1; i <= top; i++) {
             args.push(callThread.getValue(i));

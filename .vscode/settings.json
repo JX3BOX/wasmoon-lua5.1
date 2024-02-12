@@ -49,6 +49,7 @@
         "GLOBALSINDEX",
         "gsub",
         "iscfunction",
+        "istable",
         "isuserdata",
         "lessthan",
         "liblua",

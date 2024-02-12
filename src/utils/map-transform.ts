@@ -4,7 +4,7 @@ export enum DictType {
     Map,
 }
 
-declare interface MapTransformOptions {
+export declare interface MapTransformOptions {
     refs?: Map<any, any>;
     dictType?: DictType;
 }

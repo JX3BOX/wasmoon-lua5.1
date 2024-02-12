@@ -1,55 +1,63 @@
-declare type LuaState = number;
+import { DictType } from './../src/utils/map-transform';
 
-declare interface LuaCreateOptions {
-    customWasmUri?: string;
-    environmentVariables?: EnvironmentVariables;
-    openStandardLibs?: boolean | undefined;
-    traceAllocations?: boolean;
-}
+declare global {
+    type LuaState = number;
 
-declare interface LuaResumeResult {
-    result: LuaReturn;
-    resultCount: number;
-}
+    interface LuaCreateOptions {
+        customWasmUri?: string;
+        environmentVariables?: EnvironmentVariables;
+        openStandardLibs?: boolean | undefined;
+        traceAllocations?: boolean;
+    }
 
-declare interface LuaThreadRunOptions {
-    timeout?: number;
-}
+    interface LuaResumeResult {
+        result: LuaReturn;
+        resultCount: number;
+    }
 
-declare interface LuaContext {
-    [key: string]: any;
-}
+    interface LuaThreadRunOptions {
+        timeout?: number;
+    }
 
-declare interface PushValueOptions {
-    refs?: Map<any, number>;
-    metatable?: Record<string, any>;
-}
+    interface LuaContext {
+        [key: string]: any;
+    }
 
-declare interface GetValueOptions {
-    refs?: Map<number, any>;
-    type?: LuaType;
+    interface PushValueOptions {
+        refs?: Map<any, number>;
+        metatable?: Record<string, any>;
+    }
 
-    // used for table
-    dictType?: DictType;
-}
+    interface GetValueOptions {
+        refs?: Map<number, any>;
+        type?: LuaType;
 
-declare interface LuaMemoryStats {
-    memoryUsed: number;
-    memoryMax?: number;
-}
+        // used for table
+        dictType?: DictType;
+    }
 
-declare interface JsTypeDefinition {
-    name: string;
-    match: (value: any) => boolean;
-    push_metatable: () => boolean;
-}
+    interface LuaMemoryStats {
+        memoryUsed: number;
+        memoryMax?: number;
+    }
 
-declare interface LuaTable {
-    map: Map<any, any>;
-    ref: number;
-    [key: any]: any;
-    $get: (key: any) => any;
-    $set: (key: any, value: any) => void;
-    $detach: (key: any) => Map<any, any>;
-    [Symbol.iterator]: () => Iterator<T>;
+    interface JsTypeDefinition {
+        name: string;
+        match: (value: any) => boolean;
+        push_metatable: () => boolean;
+    }
+
+    interface LuaTable {
+        [key: any]: any;
+
+        $get: (key: any) => any;
+        $set: (key: any, value: any) => void;
+        $istable: () => true;
+        $getRef: () => number;
+        $detach: (options?: LuaTableDetachOptions) => Map<any, any>;
+    }
+
+    interface LuaTableDetachOptions {
+        dictType?: DictType;
+    }
 }

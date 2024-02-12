@@ -93,7 +93,8 @@ export default class Lua {
     }
 
     public doString(script: string): Promise<any> {
-        return this.callByteCode((thread) => thread.loadString(script));
+        const result = this.callByteCode((thread) => thread.loadString(script));
+        return result;
     }
 
     public doFile(filename: string): Promise<any> {
@@ -143,7 +144,6 @@ export default class Lua {
             .index((target, index) => {
                 const result = target[index];
                 if (typeof result === 'function') {
-                    // XXX: this is a hack to make sure that the function is called with the correct this
                     return result.bind(target);
                 }
                 return target[index];
@@ -170,7 +170,8 @@ export default class Lua {
                 // The shenanigans here are to return the first result value on the stack.
                 // Say there's 2 values at stack indexes 1 and 2. Then top is 2, result.length is 2.
                 // That's why there's a + 1 sitting at the end.
-                return this.global.getValue(this.global.getTop() - result.length + 1);
+                const ret = this.global.getValue(this.global.getTop() - result.length + 1);
+                return ret;
             }
             return undefined;
         } finally {
