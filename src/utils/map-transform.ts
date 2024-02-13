@@ -41,7 +41,7 @@ export const mapTransform = (map: Map<any, any>, options: MapTransformOptions = 
     const keys = [...map.keys()];
 
     // detect output type
-    const dictType = options.dictType ? options.dictType : detectDictType(keys);
+    const dictType = options.dictType === undefined ? detectDictType(keys) : options.dictType;
     if (dictType === DictType.Map) {
         return map;
     }

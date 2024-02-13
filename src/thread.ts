@@ -83,7 +83,6 @@ export default class LuaThread {
 
     public pushValue(target: unknown, options: PushValueOptions = {}): void {
         const startTop = this.getTop();
-
         if (target instanceof JsType) {
             // 如果值是JsType decorate, 针对这一个值设置metatable
             if (target._push) {
@@ -106,7 +105,7 @@ export default class LuaThread {
                 this.luaApi.lua_xmove(target.address, this.address, 1);
             }
             return;
-        } else if ((target as LuaTable).$istable) {
+        } else if (target && (target as LuaTable).$istable) {
             // 如果是从lua里拿出来的table，则直接返回
             const ref = (target as LuaTable).$getRef();
             this.luaApi.lua_rawgeti(this.address, LUA_REGISTRYINDEX, ref);
@@ -306,7 +305,6 @@ export default class LuaThread {
         for (let i = 0; i < returns; i++) {
             returnValues[i] = this.getValue(start + i + 1);
         }
-
         return returnValues;
     }
 

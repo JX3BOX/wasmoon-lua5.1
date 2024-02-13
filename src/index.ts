@@ -5,3 +5,4 @@ export { default as LuaApi } from './api';
 export { default as Lua } from './lua';
 export * from './type-bind';
 export * from './definitions';
+export * from './utils/map-transform';
