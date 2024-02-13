@@ -613,13 +613,12 @@ describe('Engine', () => {
             `);
             throw new Error('should not be reached');
         } catch (err) {
-            expect(err.message).to.includes('[string "..."]:3: function a threw error');
-            // TODO: stack traceback
-            // expect(err.message).to.includes('stack traceback:');
-            // expect(err.message).to.includes(`[string "..."]:3: in upvalue 'a'`);
-            // expect(err.message).to.includes(`[string "..."]:5: in upvalue 'b'`);
-            // expect(err.message).to.includes(`[string "..."]:6: in local 'c'`);
-            // expect(err.message).to.includes(`[string "..."]:7: in main chunk`);
+            expect(err.message).to.includes('at error ([C]:?) (C:global)');
+            expect(err.message).to.includes('stack traceback:');
+            expect(err.message).to.includes(`at a ([string "..."]:3) (Lua:upvalue)`);
+            expect(err.message).to.includes(`at b ([string "..."]:5) (Lua:upvalue)`);
+            expect(err.message).to.includes(`at c ([string "..."]:6) (Lua:local)`);
+            expect(err.message).to.includes(`at ? ([string "..."]:7) (main:)`);
         }
     });
 

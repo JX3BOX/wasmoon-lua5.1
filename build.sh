@@ -27,7 +27,8 @@ emcc \
         'setValue', \
         'lengthBytesUTF8', \
         'stringToUTF8', \
-        'stringToNewUTF8'
+        'stringToNewUTF8', \
+        'UTF8ToString'
     ]" \
     -s INCOMING_MODULE_JS_API="[
         'locateFile', \

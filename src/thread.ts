@@ -1,6 +1,7 @@
 import * as lodash from 'lodash';
 import { JsType } from './type-bind';
 import { LUA_MULTRET, LUA_REGISTRYINDEX, LuaEventMasks, LuaReturn, LuaType, PointerSize } from './definitions';
+import { LuaDebug } from './lua-debug';
 import { getTable } from './table';
 import MultiReturn from './multireturn';
 import Pointer from './utils/pointer';
@@ -427,6 +428,24 @@ export default class LuaThread {
                     } else {
                         error.message = this.indexToString(-1);
                     }
+                }
+            }
+
+            if (result !== LuaReturn.ErrorMem) {
+                const pointer = this.luaApi.module._malloc(LuaDebug.structSize);
+                try {
+                    let level = 0;
+                    const luaDebug = new LuaDebug(pointer, this.luaApi.module, error.message);
+                    while (this.luaApi.lua_getstack(this.address, level, pointer)) {
+                        this.luaApi.lua_getinfo(this.address, 'nSlu', pointer);
+                        luaDebug.read();
+                        level++;
+                    }
+                    error.message = luaDebug.getMessage();
+                } catch (err) {
+                    console.warn('Error in generate stack trace', err);
+                } finally {
+                    this.luaApi.module._free(pointer);
                 }
             }
 

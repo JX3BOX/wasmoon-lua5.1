@@ -5,6 +5,8 @@ export const LUA_REGISTRYINDEX = -10000;
 export const LUA_ENVIRONINDEX = -10001;
 export const LUA_GLOBALSINDEX = -10002;
 
+export const LUA_IDSIZE = 60;
+
 export enum LuaReturn {
     Ok = 0,
     Yield = 1,
