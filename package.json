@@ -1,6 +1,6 @@
 {
     "name": "wasmoon-lua5.1",
-    "version": "1.17.2",
+    "version": "1.18.0",
     "description": "A real lua 5.1 VM with JS bindings made with webassembly",
     "main": "dist/index.js",
     "scripts": {

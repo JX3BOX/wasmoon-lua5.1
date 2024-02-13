@@ -6,15 +6,15 @@
 
 ## From
 
-[ceifa/wasmoon](https://github.com/ceifa/wasmoon)  
+[ceifa/wasmoon](https://github.com/ceifa/wasmoon)
 
 This repository has made some modifications based on this repository, adapting it to the lua5.1 version. At the same time, some functions of this repository have been optimized/adapted/adjusted.
 
 This package aims to provide a way to:
 
-- Embed Lua to any Node.js, Deno or Web Application.
-- Run lua code in any operational system
-- Interop Lua and JS without memory leaks (including the DOM)
+-   Embed Lua to any Node.js, Deno or Web Application.
+-   Run lua code in any operational system
+-   Interop Lua and JS without memory leaks (including the DOM)
 
 ## API Usage
 
@@ -40,6 +40,50 @@ try {
 }
 ```
 
+### About data interaction
+
+Regarding the issue of interacting between JavaScript objects and Lua tables, the previous solution before version 1.18.0 was to perform a one-time conversion, such as:
+
+```js
+const obj = { name: 233 };
+lua.ctx.obj = obj; // table
+const o = lua.ctx.obj; // object, but not the same object as obj, it is a new object with the same value but different reference.
+```
+
+This approach has some problems. First of all, Lua tables are more flexible in that they allow keys of any type and their array indices start from 1.
+
+Furthermore, it is not possible to achieve data binding. After adding a JavaScript object to Lua, it is not possible to manipulate the Lua table from the JavaScript layer. Also, modifying an extracted table in JavaScript does not affect the values of the table by modifying the JavaScript object.
+
+Therefore, starting from version 1.18.0, when attempting to inject a plainObject from JavaScript into the Lua environment, a table will be created just like before. However, when exporting a table from Lua, instead of trying to convert it into an object as before, a proxy class called "LuaTable" will be generated which allows arbitrary index and newindex operations on its underlying Lua table.
+
+The "LuaTable" class provides a series of methods:
+
+-   `$get` for getting values because when indexing an object in JavaScript,
+    the key will be automatically converted to string and cannot access keys of number type properly.
+-   `$set` for setting values for similar reasons as above.
+-   `$detach` similar operation as before version 1.18.0,
+    returns a Map detached from the Lua environment (can pass parameters to return an object or array).
+-   `$istable` used for determining if it is a table.
+-   `$getRef` gets the index of this table in lua's registry.
+
+It can be used like this:
+
+```js
+import { Lua } from '../dist/index.js';
+// This file was created as a sandbox to test and debug on vscode
+
+const lua = await Lua.create();
+
+const obj = {};
+lua.ctx.obj = obj;
+
+const o = lua.ctx.obj;
+o.name = 23333;
+console.log(o.name); // 23333
+
+lua.doStringSync('print(obj.name)'); // 23333
+```
+
 ## CLI Usage
 
 Although Wasmoon has been designed to be embedded, you can run it on command line as well, but, if you want something more robust on this, we recommend to take a look at [demoon](https://github.com/ceifa/demoon).
@@ -50,8 +94,8 @@ $: wasmoon [options] [file] [args]
 
 Available options are:
 
-- `-l`: Include a file or directory
-- `-i`: Enter interactive mode after running the files
+-   `-l`: Include a file or directory
+-   `-i`: Enter interactive mode after running the files
 
 ### Example
 
@@ -219,7 +263,7 @@ print("res", res:await())
 
 Which will throw an error like this:
 
-``` js
+```js
 Error: Lua Error(ErrorRun/2): cannot resume dead coroutine
     at Thread.assertOk (/home/tstableford/projects/wasmoon/dist/index.js:409:23)
     at Thread.<anonymous> (/home/tstableford/projects/wasmoon/dist/index.js:142:22)
@@ -229,7 +273,7 @@ Error: Lua Error(ErrorRun/2): cannot resume dead coroutine
 
 Or like this:
 
-``` js
+```js
 attempt to yield across a C-call boundary
 ```
 
