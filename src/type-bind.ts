@@ -132,14 +132,14 @@ export class JsType {
 
     static decorate(target: any): JsType {
         const jsType = new JsType();
-        jsType.target = target;
+        jsType.value = target;
         return jsType;
     }
 
     public match: CheckTypeFunction | undefined;
     public _priority: number = 0;
     public _push?: (params: PushParams) => void;
-    public target?: any;
+    public value?: any;
 
     // metatable
     public _name: string | null = null;

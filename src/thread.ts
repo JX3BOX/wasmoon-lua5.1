@@ -87,10 +87,10 @@ export default class LuaThread {
         if (target instanceof JsType) {
             // 如果值是JsType decorate, 针对这一个值设置metatable
             if (target._push) {
-                target._push({ thread: this, target: target.target, options });
+                target._push({ thread: this, target: target.value, options });
             } else {
-                if (!this.pushBasicValue(target.target, options)) {
-                    const ref = this.luaApi.ref(target);
+                if (!this.pushBasicValue(target.value, options)) {
+                    const ref = this.luaApi.ref(target.value);
                     const luaPointer = this.luaApi.lua_newuserdata(this.address, PointerSize);
                     this.luaApi.module.setValue(luaPointer, ref, '*');
                 }
