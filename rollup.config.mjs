@@ -2,7 +2,6 @@ import typescript from '@rollup/plugin-typescript';
 import json from '@rollup/plugin-json';
 import dts from 'rollup-plugin-dts';
 import copy from 'rollup-plugin-copy';
-import pkg from './package.json' assert { type: 'json' };
 
 const production = !process.env.ROLLUP_WATCH;
 
