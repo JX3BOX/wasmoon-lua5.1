@@ -1,11 +1,5 @@
-import {
-    JsType,
-    registerCallFunction,
-    registerFuncCallFunction,
-    registerGcFunction,
-    registerRedirectIndexFunction,
-    registerRedirectNewIndexFunction,
-} from './type-bind';
+import { FuncManager } from './func-manager';
+import { JsType } from './js-type-bind';
 import { PointerSize } from './definitions';
 import { version } from '../package.json';
 import LuaApi from './api';
@@ -37,6 +31,7 @@ export default class Lua {
     public global: LuaGlobal;
     public ctx: LuaContext;
     public luaApi: LuaApi;
+    public funcManager: FuncManager;
 
     // 构造方法
     constructor(luaApi: LuaApi, options: LuaCreateOptions) {
@@ -45,9 +40,18 @@ export default class Lua {
             throw new Error('Lua.create(options) must be used to create a Lua instance');
         }
         this.luaApi = luaApi;
+
+        // const __addFunction = this.luaApi.module.addFunction.bind(this.luaApi.module);
+        // this.luaApi.module.addFunction = (fn: (...args: any[]) => any, signature?: string | undefined) => {
+        //     const pointer = __addFunction(fn, signature);
+        //     console.log(pointer)
+        //     return pointer;
+        // }
+
         this.global = new LuaGlobal(this.luaApi, options.traceAllocations);
 
         // 类型绑定
+        this.funcManager = new FuncManager(this.luaApi);
         this.initTypeBindings();
         // Lua上下文代理
         this.ctx = getContextProxy(this.global);
@@ -112,23 +116,29 @@ export default class Lua {
     }
 
     private initTypeBindings(): void {
-        const gcPointer = registerGcFunction(this.global);
-        const funcCallPointer = registerFuncCallFunction(this.global);
         JsType.create('js-function', (value: any) => typeof value === 'function' && !value.toString().startsWith('class'))
-            .gc(gcPointer)
+            .gc(this.funcManager.registerGcFunction(this.global))
             .push(({ thread, target }) => {
                 const ref = thread.luaApi.ref(target);
                 const luaPointer = thread.luaApi.lua_newuserdata(thread.address, PointerSize);
                 thread.luaApi.module.setValue(luaPointer, ref, '*');
                 thread.luaApi.luaL_getmetatable(thread.address, 'js-function');
                 thread.luaApi.lua_setmetatable(thread.address, -2);
-                thread.luaApi.lua_pushcclosure(thread.address, funcCallPointer, 1);
+                thread.luaApi.lua_pushcclosure(thread.address, this.funcManager.registerFuncCallFunction(this.global), 1);
+                const pointer = thread.luaApi.lua_topointer(thread.address, -1);
+
+                // 注册一个指针映射，从userdata到function。用于gc的时候删除对应的pointer
+                this.funcManager.pointerRedirect.set(luaPointer, pointer);
+                // 注册一个index映射，当尝试从function上索引/tostring值的时候，回溯userdata代表的js对象
+                this.funcManager.addIndexRedirect(pointer, target);
 
                 // proxy for function, avoid `attempt to index global 'TestFunction' (a function value)`
                 thread.luaApi.lua_createtable(thread.address, 0, 0);
-                thread.luaApi.lua_pushcfunction(thread.address, registerRedirectIndexFunction(this.global, target));
+                thread.luaApi.lua_pushcfunction(thread.address, this.funcManager.registerToStringFunction(this.global));
+                thread.luaApi.lua_setfield(thread.address, -2, '__tostring');
+                thread.luaApi.lua_pushcfunction(thread.address, this.funcManager.registerIndexFunction(this.global));
                 thread.luaApi.lua_setfield(thread.address, -2, '__index');
-                thread.luaApi.lua_pushcfunction(thread.address, registerRedirectNewIndexFunction(this.global, target));
+                thread.luaApi.lua_pushcfunction(thread.address, this.funcManager.registerNewIndexFunction(this.global));
                 thread.luaApi.lua_setfield(thread.address, -2, '__newindex');
 
                 thread.luaApi.lua_setmetatable(thread.address, -2);
@@ -136,19 +146,11 @@ export default class Lua {
             .bind(this.global);
 
         JsType.create('js-userdata', () => true)
-            .gc(gcPointer)
-            .call(registerCallFunction(this.global))
-            .index((target, index) => {
-                const result = target[index];
-                if (typeof result === 'function') {
-                    return result.bind(target);
-                }
-                return target[index];
-            })
-            .newindex((target: any, index: any, value: any) => {
-                return (target[index] = value);
-            })
-            .tostring((target: any) => target.toString())
+            .gc(this.funcManager.registerGcFunction(this.global))
+            .call(this.funcManager.registerCallFunction(this.global))
+            .index(this.funcManager.registerIndexFunction(this.global))
+            .newindex(this.funcManager.registerNewIndexFunction(this.global))
+            .tostring(this.funcManager.registerToStringFunction(this.global))
             .priority(-1)
             .bind(this.global);
     }

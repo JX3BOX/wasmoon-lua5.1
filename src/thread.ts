@@ -1,5 +1,5 @@
 import * as lodash from 'lodash';
-import { JsType } from './type-bind';
+import { JsType } from './js-type-bind';
 import { LUA_MULTRET, LUA_REGISTRYINDEX, LuaEventMasks, LuaReturn, LuaType, PointerSize } from './definitions';
 import { LuaDebug } from './lua-debug';
 import { getTable } from './table';
@@ -250,7 +250,10 @@ export default class LuaThread {
                 thread.close();
             }
         };
-
+        func.$destroy = () => {
+            this.luaApi.luaL_unref(this.address, LUA_REGISTRYINDEX, funcRef);
+            this.luaApi.pointerRefs.delete(pointer);
+        };
         this.luaApi.pointerRefs.set(pointer, func);
         return func;
     }
