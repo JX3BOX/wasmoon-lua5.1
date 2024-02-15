@@ -2,6 +2,7 @@ import typescript from '@rollup/plugin-typescript';
 import json from '@rollup/plugin-json';
 import dts from 'rollup-plugin-dts';
 import copy from 'rollup-plugin-copy';
+import nodePolyfills from 'rollup-plugin-polyfill-node';
 
 const production = !process.env.ROLLUP_WATCH;
 
@@ -30,6 +31,7 @@ export default [
                 targets: [{ src: 'build/liblua5.1.wasm', dest: 'dist' }],
             }),
             json(),
+            nodePolyfills(),
         ],
     },
     {
