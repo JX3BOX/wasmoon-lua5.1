@@ -3,17 +3,18 @@ import { Lua } from '../dist/index.js';
 
 const lua = await Lua.create();
 
-lua.ctx.s = {
-    name: 123,
-};
+class Test {
+    hello() {
+        return 1234;
+    }
+}
 
-for (const index of Array.from({ length: 10 }, (_, i) => i + 1)) {
+for (const index of Array.from({ length: 20 }, (_, i) => i + 1)) {
     console.log(index);
-    lua.ctx.s = {
-        name: 123,
-    };
-    const table = lua.ctx.s;
-    console.log(table);
-    table.$destroy();
-    console.log(table);
+    const test = new Test();
+    lua.ctx.test = test;
+    for (const i of Array.from({ length: 50 }, (_, i) => i + 1)) {
+        await lua.doString('test:hello()');
+    }
+    console.log('ref ', lua.luaApi.referenceMap);
 }
