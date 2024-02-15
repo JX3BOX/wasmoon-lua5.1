@@ -4,7 +4,6 @@ import { LUA_MULTRET, LUA_REGISTRYINDEX, LuaEventMasks, LuaReturn, LuaType, Poin
 import { LuaDebug } from './lua-debug';
 import { getTable } from './table';
 import MultiReturn from './multireturn';
-import Pointer from './utils/pointer';
 import type LuaApi from './api';
 
 // When the debug count hook is set, call it every X instructions.
@@ -463,15 +462,15 @@ export default class LuaThread {
     }
 
     //============调试用
-    public getGlobalPointer(name: string): Pointer {
+    public getGlobalPointer(name: string): number {
         this.luaApi.lua_getglobal(this.address, name);
         const pointer = this.getPointer(-1);
         this.pop();
         return pointer;
     }
 
-    public getPointer(index: number): Pointer {
-        return new Pointer(this.luaApi.lua_topointer(this.address, index));
+    public getPointer(index: number): number {
+        return this.luaApi.lua_topointer(this.address, index);
     }
 
     public indexToString(index: number): string {
