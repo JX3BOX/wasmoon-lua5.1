@@ -7,13 +7,13 @@ lua.ctx.s = {
     name: 123,
 };
 
-lua.ctx.s.a = {};
-lua.ctx.s.a.b = {};
-lua.ctx.s.a.b.c = {};
-lua.ctx.s.a.b.c.name = '233';
-
-console.log(lua.ctx.s.a.b.c);
-await lua.doString(`
-    print(s.a.b.c)
-    print(s.a.b.c.name)
-`);
+for (const index of Array.from({ length: 10 }, (_, i) => i + 1)) {
+    console.log(index);
+    lua.ctx.s = {
+        name: 123,
+    };
+    const table = lua.ctx.s;
+    console.log(table);
+    table.$destroy();
+    console.log(table);
+}

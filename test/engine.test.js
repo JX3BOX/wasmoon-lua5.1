@@ -718,6 +718,22 @@ describe('Engine', () => {
         expect(res).to.equal(10);
     });
 
+    it('after LuaTable is destroyed, it will no longer be accessible in any way.', async () => {
+        const lua = await Lua.create();
+
+        lua.ctx.s = {
+            name: 123,
+        };
+
+        const table = lua.ctx.s;
+        table.$destroy();
+        try {
+            table.x;
+        } catch (err) {
+            expect(err.message).to.includes('is destroyed');
+        }
+    });
+
     // // lua5.1 does not support 64 bit integers
     // it('number greater than 32 bit int should be pushed and retrieved as string', async () => {
     //     const lua = await Lua.create();

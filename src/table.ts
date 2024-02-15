@@ -7,6 +7,7 @@ export class LuaTable {
     private thread: LuaThread;
     private ref: number;
     private pointer: number;
+    private alive: boolean = true;
 
     [key: string]: any;
     [key: symbol]: any;
@@ -22,6 +23,9 @@ export class LuaTable {
     }
 
     public $get(key: any): any {
+        if (!this.alive) {
+            throw new Error('table is destroyed');
+        }
         return this.getTableValue(key);
     }
 
@@ -45,8 +49,18 @@ export class LuaTable {
         return map;
     }
 
+    public $isAlive(): boolean {
+        return this.alive;
+    }
+
+    public $destroy(): void {
+        this.thread.luaApi.luaL_unref(this.thread.address, LUA_REGISTRYINDEX, this.ref);
+        this.thread.luaApi.pointerRefs.delete(this.pointer);
+        this.alive = false;
+    }
+
     public toString(): string {
-        return `[LuaTable 0x${this.pointer.toString(16)} *${this.ref}]`;
+        return `[LuaTable 0x${this.pointer.toString(16)} *${this.ref} ${this.alive ? 'Alive' : 'Destroyed'}]`;
     }
 
     private getTableValue(key: any): any {
@@ -106,8 +120,11 @@ export const getTable = (thread: LuaThread, index: number): LuaTable => {
     const table = new LuaTable(thread, ref, pointer);
     const { proxy, revoke } = Proxy.revocable(table, {
         get: (target, key) => {
+            if (!target.$isAlive() && key !== 'toString') {
+                throw new Error(`${target.toString()} is destroyed`);
+            }
             if (target[key]) {
-                return target[key];
+                return target[key].bind(target);
             }
             if (key === Symbol.toStringTag) {
                 return () => 'LuaTable';
@@ -117,7 +134,12 @@ export const getTable = (thread: LuaThread, index: number): LuaTable => {
             }
             return target.$get(key);
         },
-        set: (target, key, value) => target.$set(key, value),
+        set: (target, key, value) => {
+            if (!target.$isAlive()) {
+                throw new Error(`${target.toString()} is destroyed`);
+            }
+            return target.$set(key, value);
+        },
     });
 
     thread.luaApi.pointerRefs.set(pointer, { proxy, revoke });
