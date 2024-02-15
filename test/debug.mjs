@@ -3,10 +3,17 @@ import { Lua } from '../dist/index.js';
 
 const lua = await Lua.create();
 
-lua.ctx.a = { name: 'a' };
-lua.ctx.a.b = { name: 'b' };
-lua.ctx.a.b.c = { name: 'c' };
-lua.ctx.a.b.c.d = { name: 'd' };
+await lua.doString(`
+function Apply() 
+    function Apply() 
+        print(123)
+    end
+end
+`);
 
-lua.global.dumpStack();
-console.log(lua.global.getValue(-1).$detach());
+console.log(lua.global.getGlobalPointer('Apply'));
+await lua.doString(`Apply()`);
+console.log(lua.global.getGlobalPointer('Apply'));
+await lua.doString(`Apply()`);
+console.log(lua.global.getGlobalPointer('Apply'));
+await lua.doString(`Apply()`);

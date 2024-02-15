@@ -463,6 +463,13 @@ export default class LuaThread {
     }
 
     //============调试用
+    public getGlobalPointer(name: string): Pointer {
+        this.luaApi.lua_getglobal(this.address, name);
+        const pointer = this.getPointer(-1);
+        this.pop();
+        return pointer;
+    }
+
     public getPointer(index: number): Pointer {
         return new Pointer(this.luaApi.lua_topointer(this.address, index));
     }
