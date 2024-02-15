@@ -1,22 +1,19 @@
-import { JsType, Lua } from '../dist/index.js';
+import { Lua } from '../dist/index.js';
 // This file was created as a sandbox to test and debug on vscode
 
 const lua = await Lua.create();
 
-class S {
-    pp() {
-        console.log('pp');
-    }
-}
-const s = new S();
+lua.ctx.s = {
+    name: 123,
+};
 
-lua.ctx.s = JsType.decorate(s)
-    .tostring(() => '2333')
-    .index((target, key) => target[key])
-    .newindex((target, key, value) => {
-        target[key] = value;
-    });
+lua.ctx.s.a = {};
+lua.ctx.s.a.b = {};
+lua.ctx.s.a.b.c = {};
+lua.ctx.s.a.b.c.name = '233';
 
+console.log(lua.ctx.s.a.b.c);
 await lua.doString(`
-    print(s) 
+    print(s.a.b.c)
+    print(s.a.b.c.name)
 `);

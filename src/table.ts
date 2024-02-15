@@ -1,5 +1,6 @@
 import { DictType, mapTransform } from './utils/map-transform';
 import { LUA_REGISTRYINDEX, LuaType } from './definitions';
+import { inspect } from 'util';
 import LuaThread from './thread';
 
 export class LuaTable {
@@ -14,6 +15,10 @@ export class LuaTable {
         this.thread = thread;
         this.ref = ref;
         this.pointer = pointer;
+    }
+
+    [inspect.custom](): string {
+        return this.toString();
     }
 
     public $get(key: any): any {
@@ -41,7 +46,7 @@ export class LuaTable {
     }
 
     public toString(): string {
-        return `[LuaTable *${this.ref} 0x${this.pointer.toString(16)}]`;
+        return `[LuaTable 0x${this.pointer.toString(16)} *${this.ref}]`;
     }
 
     private getTableValue(key: any): any {
