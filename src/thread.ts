@@ -407,7 +407,7 @@ export default class LuaThread {
                 }, 'vii');
             }
 
-            this.luaApi.lua_sethook(this.address, this.hookFunctionPointer, LuaEventMasks.Count, INSTRUCTION_HOOK_COUNT);
+            this.luaApi.lua_sethook(this.address, this.hookFunctionPointer as number, LuaEventMasks.Count, INSTRUCTION_HOOK_COUNT);
             this.timeout = timeout;
         } else if (this.hookFunctionPointer) {
             this.hookFunctionPointer = undefined;

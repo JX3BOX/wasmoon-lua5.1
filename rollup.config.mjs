@@ -3,6 +3,7 @@ import json from '@rollup/plugin-json';
 import dts from 'rollup-plugin-dts';
 import copy from 'rollup-plugin-copy';
 import nodePolyfills from 'rollup-plugin-polyfill-node';
+import fs from 'fs';
 
 const production = !process.env.ROLLUP_WATCH;
 
@@ -37,6 +38,15 @@ export default [
     {
         input: './src/index.ts',
         output: { file: 'dist/index.d.ts', format: 'es' },
-        plugins: [dts()],
+        plugins: [
+            dts(),
+            {
+                name: 'reference',
+                banner: fs
+                    .readdirSync(`types`)
+                    .map((s) => `/// <reference path="../types/${s}" />`)
+                    .join('\n'),
+            },
+        ],
     },
 ];
