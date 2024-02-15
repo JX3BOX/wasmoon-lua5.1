@@ -3,16 +3,10 @@ import { Lua } from '../dist/index.js';
 
 const lua = await Lua.create();
 
-function test() {
-    return 1234;
-}
+lua.ctx.a = { name: 'a' };
+lua.ctx.a.b = { name: 'b' };
+lua.ctx.a.b.c = { name: 'c' };
+lua.ctx.a.b.c.d = { name: 'd' };
 
-for (const index of Array.from({ length: 1 }, (_, i) => i + 1)) {
-    console.log(index);
-    lua.ctx.test = test;
-    for (const i of Array.from({ length: 50 }, (_, i) => i + 1)) {
-        await lua.doString('test()');
-        await lua.doString(`print(test.x)`);
-        await lua.doString(`test.x = ${i}`);
-    }
-}
+lua.global.dumpStack();
+console.log(lua.global.getValue(-1).$detach());

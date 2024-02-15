@@ -68,7 +68,7 @@ export class LuaTable {
         this.thread.pushValue(key);
         this.thread.luaApi.lua_gettable(this.thread.address, -2);
         const result = this.thread.getValue(-1);
-        this.thread.pop();
+        this.thread.pop(2);
         return result;
     }
 
