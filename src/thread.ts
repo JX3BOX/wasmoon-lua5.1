@@ -226,6 +226,9 @@ export default class LuaThread {
         }
 
         const func = (...args: any[]): any => {
+            if (!func.$isAlive()) {
+                throw new Error('Tried to call a function that has been destroyed');
+            }
             if (this.isClosed()) {
                 console.warn('Tried to call a function after closing lua state');
                 return;
@@ -250,11 +253,14 @@ export default class LuaThread {
                 thread.close();
             }
         };
+        func.$isAlive = () => true;
         func.$destroy = () => {
             this.luaApi.luaL_unref(this.address, LUA_REGISTRYINDEX, funcRef);
             this.luaApi.pointerRefs.delete(pointer);
+            func.$isAlive = () => false;
         };
         this.luaApi.pointerRefs.set(pointer, func);
+
         return func;
     }
 
