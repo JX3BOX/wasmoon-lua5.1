@@ -4,16 +4,26 @@ import { Lua } from '../dist/index.js';
 const lua = await Lua.create();
 
 await lua.doString(`
-function Apply() 
-    function Apply() 
-        print(123)
-    end
-end
-`);
+    x = function ()
+    print(1)
+ return 1
+ end
+ z = function ()
+    print(1)
+ return 1
+ end
+ `);
 
-console.log(lua.global.getGlobalPointer('Apply'));
-await lua.doString(`Apply()`);
-console.log(lua.global.getGlobalPointer('Apply'));
-await lua.doString(`Apply()`);
-console.log(lua.global.getGlobalPointer('Apply'));
-await lua.doString(`Apply()`);
+const x = lua.ctx.x;
+const y = lua.ctx.z;
+console.log(x === y);
+lua.global.dumpStack();
+console.log('===========');
+console.log(x());
+lua.global.dumpStack();
+console.log('===========');
+console.log(x());
+lua.global.dumpStack();
+console.log('===========');
+console.log(x());
+lua.global.dumpStack();

@@ -250,6 +250,7 @@ export default class LuaThread {
                 return undefined;
             } finally {
                 thread.close();
+                this.pop();
             }
         };
         func.$isAlive = () => true;
@@ -259,7 +260,6 @@ export default class LuaThread {
             func.$isAlive = () => false;
         };
         this.luaApi.pointerRefs.set(pointer, func);
-
         return func;
     }
 
