@@ -12,9 +12,9 @@ This repository has made some modifications based on this repository, adapting i
 
 This package aims to provide a way to:
 
--   Embed Lua to any Node.js, Deno or Web Application.
--   Run lua code in any operational system
--   Interop Lua and JS without memory leaks (including the DOM)
+- Embed Lua to any Node.js, Deno or Web Application.
+- Run lua code in any operational system
+- Interop Lua and JS without memory leaks (including the DOM)
 
 ## Package entry points
 
@@ -30,9 +30,9 @@ are required. `$detach(DictType.Object)` and `$detach(DictType.Array)` now decla
 their actual return types. The former UMD script-tag bundle is replaced by the ESM
 entry; browser applications should import through their bundler.
 
-## Build and staged publishing
+## Build and publishing
 
-Use Node 24.15+ for development and npm 12.2.0 for staged publishing. Build the
+Use Node 24.15+ for development and npm 12.2.0 for publishing. Build the
 WASM with Emscripten 6.0.11, then build the JavaScript and declarations with tsdown:
 
 ```sh
@@ -48,13 +48,6 @@ The WASM build script requires Bash and an activated emsdk. Windows can run it i
 Git Bash after setting up emsdk. `npm run test:package` packs and installs the real
 tarball in a temporary directory, then checks CJS/ESM execution, async file loading,
 CLI operation, and strict TypeScript consumers without repository type access.
-
-`.github/workflows/publish.yml` validates pull requests and main pushes. Only a main
-push runs `npm stage publish --provenance --access public`, using GitHub OIDC
-(`id-token: write`), without `NPM_TOKEN`. Keep the npm Trusted Publisher configured
-for `JX3BOX/wasmoon-lua5.1` and the exact filename `publish.yml`. This workflow stages
-the package; a maintainer subsequently approves it on npm. Each new stage needs an
-unused package version; retrying an already staged version does not overwrite it.
 
 The old `luatests` command did not execute Lua tests; it and the fully commented-out
 Promise test file were removed. Async behavior is covered by `bind-async.test.js`.
@@ -122,13 +115,13 @@ Therefore, starting from version 1.18.0, when attempting to inject a plainObject
 
 The "LuaTable" class provides a series of methods:
 
--   `$get` for getting values because when indexing an object in JavaScript,
+- `$get` for getting values because when indexing an object in JavaScript,
     the key will be automatically converted to string and cannot access keys of number type properly.
--   `$set` for setting values for similar reasons as above.
--   `$detach` similar operation as before version 1.18.0,
+- `$set` for setting values for similar reasons as above.
+- `$detach` similar operation as before version 1.18.0,
     returns a Map detached from the Lua environment (can pass parameters to return an object or array).
--   `$istable` used for determining if it is a table.
--   `$getRef` gets the index of this table in lua's registry.
+- `$istable` used for determining if it is a table.
+- `$getRef` gets the index of this table in lua's registry.
 
 It can be used like this:
 
@@ -187,8 +180,8 @@ $: wasmoon [options] [file] [args]
 
 Available options are:
 
--   `-l`: Include a file or directory
--   `-i`: Enter interactive mode after running the files
+- `-l`: Include a file or directory
+- `-i`: Enter interactive mode after running the files
 
 ### Example
 

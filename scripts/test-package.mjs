@@ -73,7 +73,7 @@ try {
                 skipLibCheck: false,
                 noEmit: true,
                 types: [],
-                lib: ['ES2022', 'DOM'],
+                lib: ['ES2022'],
             },
             files: ['consumer.cts', 'consumer.mts', 'globals.ts'],
         }),

@@ -149,7 +149,7 @@ export default class LuaApi {
     public lua_xmove: (from: LuaState, to: LuaState, n: number) => void;
     public lua_yield: (L: LuaState, nresults: number) => number;
 
-    public luaopen_base: (L: LuaState) => SVGAnimatedNumberList;
+    public luaopen_base: (L: LuaState) => number;
     public luaopen_table: (L: LuaState) => number;
     public luaopen_io: (L: LuaState) => number;
     public luaopen_os: (L: LuaState) => number;

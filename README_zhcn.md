@@ -1,6 +1,6 @@
 # Wasmoon Lua 5.1
 
-构建、发布与类型使用以 [README](README.md#build-and-staged-publishing) 为准。
+构建、发布与类型使用以 [README](README.md#build-and-publishing) 为准。
 产物现在包含 CommonJS、ESM 和完整声明文件；通过包入口导入类型即可：
 
 ```ts
@@ -8,8 +8,6 @@ import { Lua, type LuaCreateOptions } from 'wasmoon-lua5.1';
 ```
 
 不再注入全局类型，也不需要调用方引用仓库的 `types/` 或开启 `skipLibCheck`。
-`publish.yml` 使用 GitHub OIDC 执行 `npm stage publish`，仅暂存包，等待维护者在
-npm 审批。旧 UMD script 标签产物由 ESM 入口替代，浏览器项目通过打包工具导入。
 
 ### 关于数据交互
 
@@ -26,11 +24,11 @@ const o = lua.ctx.obj; // object,但是和obj不是一个对象,是一个值相�
 所以从1.18.0开始，当尝试把js的plainObject注入lua环境中时，像之前一样会创建一个table。但是当从lua中导出一个table时，不会再尝试将其组成一个对象，而是生成一个代理的LuaTable类，可以对其进行任意的index，newindex操作以修改lua内的table。  
 这个LuaTable类提供了一系列方法:
 
--   `$get` 获取值，因为js如果对对象index的时候，key会被自动转换为string。无法正常访问number类型的键。
--   `$set` 设置值，理由同上
--   `$detach` 类似1.18.0以前的操作，返回一个与lua环境脱钩的Map（可以传入参数返回object或者array）
--   `$istable` 用于判断是不是一个table
--   `$getRef` 获取table在lua环境注册表中的索引
+- `$get` 获取值，因为js如果对对象index的时候，key会被自动转换为string。无法正常访问number类型的键。
+- `$set` 设置值，理由同上
+- `$detach` 类似1.18.0以前的操作，返回一个与lua环境脱钩的Map（可以传入参数返回object或者array）
+- `$istable` 用于判断是不是一个table
+- `$getRef` 获取table在lua环境注册表中的索引
 
 可以像这样使用：
 
