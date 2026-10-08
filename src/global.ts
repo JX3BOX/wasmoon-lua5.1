@@ -1,5 +1,7 @@
+// 管理 Lua 主状态的内存、全局变量和关闭过程。
 import { LuaLibraries } from './definitions';
 import LuaThread from './thread';
+import type { LuaMemoryStats, PushValueOptions } from './types';
 import type LuaApi from './api';
 
 export default class LuaGlobal extends LuaThread {

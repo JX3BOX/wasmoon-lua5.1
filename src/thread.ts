@@ -1,9 +1,11 @@
-import * as lodash from 'lodash';
+// 管理 Lua 协程、栈操作、值转换和异步恢复。
 import { JsType } from './js-type-bind';
 import { LUA_MULTRET, LUA_REGISTRYINDEX, LuaEventMasks, LuaReturn, LuaType, PointerSize } from './definitions';
 import { LuaDebug } from './lua-debug';
-import { getTable } from './table';
+import { type LuaTable, getTable } from './table';
 import MultiReturn from './multireturn';
+import lodash from 'lodash';
+import type { GetValueOptions, LuaResumeResult, LuaState, LuaThreadRunOptions, PushValueOptions } from './types';
 import type LuaApi from './api';
 
 // When the debug count hook is set, call it every X instructions.
@@ -263,7 +265,7 @@ export default class LuaThread {
         return func;
     }
 
-    public getTable(index: number): Record<string | number, any> {
+    public getTable(index: number): LuaTable {
         return getTable(this, index);
     }
 

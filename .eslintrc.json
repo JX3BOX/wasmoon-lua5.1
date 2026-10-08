@@ -22,9 +22,10 @@
     "ignorePatterns": [
         "dist/*",
         "build/*",
-        "rollup.config.mjs",
         "utils/*",
-        "lua/*"
+        "lua/*",
+        "tsdown.config.mts",
+        "scripts/*"
     ],
     "rules": {
         "no-console": "off",

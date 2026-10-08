@@ -1,6 +1,6 @@
 # Wasmoon-lua5.1
 
-[![Build Status](https://github.com/X3ZvaWQ/wasmoon-lua5.1/actions/workflows/publish.yml/badge.svg)](https://github.com/ceifa/wasmoon/actions/workflows/publish.yml)
+[![Build Status](https://github.com/JX3BOX/wasmoon-lua5.1/actions/workflows/publish.yml/badge.svg)](https://github.com/JX3BOX/wasmoon-lua5.1/actions/workflows/publish.yml)
 [![npm](https://img.shields.io/npm/v/wasmoon-lua5.1.svg)](https://npmjs.com/package/wasmoon-lua5.1)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
@@ -15,6 +15,49 @@ This package aims to provide a way to:
 -   Embed Lua to any Node.js, Deno or Web Application.
 -   Run lua code in any operational system
 -   Interop Lua and JS without memory leaks (including the DOM)
+
+## Package entry points
+
+The package ships CommonJS (`require`) and ESM (`import`) entries, bundled type
+declarations, and `dist/liblua5.1.wasm`. Import public types from the package:
+
+```ts
+import { Lua, type LuaCreateOptions } from 'wasmoon-lua5.1';
+```
+
+No ambient `types/` files, global type names, or consumer `skipLibCheck` setting
+are required. `$detach(DictType.Object)` and `$detach(DictType.Array)` now declare
+their actual return types. The former UMD script-tag bundle is replaced by the ESM
+entry; browser applications should import through their bundler.
+
+## Build and staged publishing
+
+Use Node 24.15+ for development and npm 12.2.0 for staged publishing. Build the
+WASM with Emscripten 6.0.11, then build the JavaScript and declarations with tsdown:
+
+```sh
+npm ci
+npm run build:wasm
+npm run typecheck
+npm run build
+npm test
+npm run test:package
+```
+
+The WASM build script requires Bash and an activated emsdk. Windows can run it in
+Git Bash after setting up emsdk. `npm run test:package` packs and installs the real
+tarball in a temporary directory, then checks CJS/ESM execution, async file loading,
+CLI operation, and strict TypeScript consumers without repository type access.
+
+`.github/workflows/publish.yml` validates pull requests and main pushes. Only a main
+push runs `npm stage publish --provenance --access public`, using GitHub OIDC
+(`id-token: write`), without `NPM_TOKEN`. Keep the npm Trusted Publisher configured
+for `JX3BOX/wasmoon-lua5.1` and the exact filename `publish.yml`. This workflow stages
+the package; a maintainer subsequently approves it on npm. Each new stage needs an
+unused package version; retrying an already staged version does not overwrite it.
+
+The old `luatests` command did not execute Lua tests; it and the fully commented-out
+Promise test file were removed. Async behavior is covered by `bind-async.test.js`.
 
 ## API Usage
 
@@ -31,7 +74,7 @@ try {
     const ctx = lua.ctx;
     ctx.add = (a, b) => a + b;
     console.log(ctx.add(114514, 1919810));
-    lua.doString(`
+    await lua.doString(`
         print(add(114514, 1919810))
     `);
 } finally {
@@ -39,6 +82,27 @@ try {
     lua.global.close();
 }
 ```
+
+### Async JavaScript functions
+
+Use `bindAsync` when Lua must wait for a JavaScript operation:
+
+```js
+lua.bindAsync('readText', async (name) => fs.readFile(name, 'utf8'));
+const text = await lua.doString('local value = readText("input.txt"); return value');
+```
+
+The Lua wrapper yields a Promise and resumes the same coroutine when it settles.
+Local variables and preceding side effects are preserved; rejection becomes a Lua
+error. Results use the usual JS-to-Lua conversion (one return value). Synchronous
+callbacks are also accepted. Ordinary `lua.ctx.fn = callback` bindings keep their
+synchronous behavior.
+
+Call these functions through `doString`/`doFile`, await completion before closing
+the VM, and serialize executions on the same VM. Lua 5.1 native `pcall`, `xpcall`,
+`require`, and metamethod C boundaries are still not yieldable. Applications that
+need protected async file loading must use Lua coroutine-based protected calls and
+`loadfile` followed by a Lua call, as implemented in `jx3-skill-parser`.
 
 ### About data interaction
 
@@ -261,77 +325,5 @@ npm test # ensure everything it's working fine
 
 ### Promises
 
-Promises can be await'd from Lua with some caveats detailed in the below section. To await a Promise call `:await()` on it which will yield the Lua execution until the promise completes.
-
-```js
-const { LuaFactory } = require('wasmoon');
-const factory = new LuaFactory();
-const lua = await factory.createEngine();
-
-try {
-    lua.global.set('sleep', (length) => new Promise((resolve) => setTimeout(resolve, length)));
-    await lua.doString(`
-        sleep(1000):await()
-    `);
-} finally {
-    lua.global.close();
-}
-```
-
-### Async/Await
-
-It's not possible to await in a callback from JS into Lua. This is a limitation of Lua but there are some workarounds. It can also be encountered when yielding at the top-level of a file. An example where you might encounter this is a snippet like this:
-
-```js
-local res = sleep(1):next(function ()
-    sleep(10):await()
-    return 15
-end)
-print("res", res:await())
-```
-
-Which will throw an error like this:
-
-```js
-Error: Lua Error(ErrorRun/2): cannot resume dead coroutine
-    at Thread.assertOk (/home/tstableford/projects/wasmoon/dist/index.js:409:23)
-    at Thread.<anonymous> (/home/tstableford/projects/wasmoon/dist/index.js:142:22)
-    at Generator.throw (<anonymous>)
-    at rejected (/home/tstableford/projects/wasmoon/dist/index.js:26:69)
-```
-
-Or like this:
-
-```js
-attempt to yield across a C-call boundary
-```
-
-You can workaround this by doing something like below:
-
-```lua
-function async(callback)
-    return function(...)
-        local co = coroutine.create(callback)
-        local safe, result = coroutine.resume(co, ...)
-
-        return Promise.create(function(resolve, reject)
-            local function step()
-                if coroutine.status(co) == "dead" then
-                    local send = safe and resolve or reject
-                    return send(result)
-                end
-
-                safe, result = coroutine.resume(co)
-
-                if safe and result == Promise.resolve(result) then
-                    result:finally(step)
-                else
-                    step()
-                end
-            end
-
-            result:finally(step)
-        end)
-    end
-end
-```
+Use `Lua.bindAsync` as shown above. The Lua 5.4 examples using `LuaFactory`,
+`Promise.create` and `:await()` do not apply to this Lua 5.1 implementation.

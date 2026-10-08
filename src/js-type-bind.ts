@@ -1,4 +1,6 @@
+// 定义 JS 值与 Lua 用户数据之间的类型绑定和元方法。
 import LuaThread from './thread';
+import type { PushValueOptions } from './types';
 
 declare type CheckTypeFunction = (value: any) => boolean;
 

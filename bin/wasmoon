@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// 提供脚本、标准输入和交互式 Lua 执行，复用库内文件挂载与 VM 生命周期。
 const { LuaReturn, LuaType, LUA_MULTRET, Lua } = require('../dist');
 const fs = require('fs');
 const path = require('path');
@@ -18,93 +19,97 @@ async function* walk(dir) {
 
 async function main() {
     const lua = await Lua.create();
-    const luamodule = lua.luaApi;
+    try {
+        const luamodule = lua.luaApi;
 
-    let snippets = process.argv.splice(2);
+        let snippets = process.argv.splice(2);
 
-    const consumeOption = (option, single) => {
-        let i = -1;
-        const values = [];
-        while ((i = snippets.indexOf(option)) >= 0) {
-            values.push(snippets.splice(i, single ? 1 : 2).reverse()[0]);
-        }
-        return values;
-    };
-
-    const includes = consumeOption('-l');
-    const forceInteractive = consumeOption('-i', true).length > 0;
-    const runFile = process.stdin.isTTY && consumeOption(snippets[0], true)[0];
-    const args = snippets;
-
-    for (const include of includes) {
-        const relativeInclude = path.resolve(process.cwd(), include);
-        const stat = await fs.promises.lstat(relativeInclude);
-        if (stat.isFile()) {
-            await factory.mountFile(relativeInclude, await fs.promises.readFile(relativeInclude));
-        } else {
-            for await (const file of walk(relativeInclude)) {
-                await factory.mountFile(file, await fs.promises.readFile(file));
+        const consumeOption = (option, single) => {
+            let i = -1;
+            const values = [];
+            while ((i = snippets.indexOf(option)) >= 0) {
+                values.push(snippets.splice(i, single ? 1 : 2).reverse()[0]);
             }
-        }
-    }
+            return values;
+        };
 
-    lua.global.set('arg', args);
+        const includes = consumeOption('-l');
+        const forceInteractive = consumeOption('-i', true).length > 0;
+        const runFile = snippets.length ? consumeOption(snippets[0], true)[0] : undefined;
+        const args = snippets;
 
-    const interactive = process.stdin.isTTY && (forceInteractive || !runFile);
-
-    if (runFile) {
-        const relativeRunFile = path.resolve(process.cwd(), runFile);
-        await factory.mountFile(relativeRunFile, await fs.promises.readFile(relativeRunFile));
-
-        await lua.doFile(relativeRunFile);
-        console.log(lua.global.indexToString(-1));
-    }
-
-    if (!interactive && runFile) {
-        return;
-    }
-
-    if (interactive) {
-        // Call directly from module to bypass the result verification
-        const loadcode = (code) => !lua.global.setTop(0) && luamodule.luaL_loadstring(lua.global.address, code) === LuaReturn.Ok;
-
-        const version = require('../package.json').version;
-        console.log('Welcome to Wasmoon v' + version);
-
-        const rl = readline.createInterface({
-            input: process.stdin,
-            output: process.stdout,
-            terminal: true,
-            removeHistoryDuplicates: true,
-        });
-
-        rl.prompt();
-
-        for await (const line of rl) {
-            const loaded = loadcode(line) || loadcode(`return ${line}`);
-            if (!loaded) {
-                console.log(lua.global.getValue(-1, LuaType.String));
-                rl.prompt();
-                continue;
-            }
-
-            const result = luamodule.lua_pcall(lua.global.address, 0, 1, 0, 0, null);
-            if (result === LuaReturn.Ok) {
-                const top = lua.global.getTop();
-                const returnValues = Array.from({ length: top }).map((_, i) => lua.global.indexToString(i + 1));
-
-                if (returnValues.length) {
-                    console.log(...returnValues);
-                }
+        for (const include of includes) {
+            const relativeInclude = path.resolve(process.cwd(), include).replaceAll('\\', '/');
+            const stat = await fs.promises.lstat(relativeInclude);
+            if (stat.isFile()) {
+                lua.mountFile(relativeInclude, await fs.promises.readFile(relativeInclude));
             } else {
-                console.log(lua.global.getValue(-1, LuaType.String));
+                for await (const file of walk(relativeInclude)) {
+                    lua.mountFile(file.replaceAll('\\', '/'), await fs.promises.readFile(file));
+                }
             }
+        }
+
+        lua.global.set('arg', args);
+
+        const interactive = process.stdin.isTTY && (forceInteractive || !runFile);
+
+        if (runFile) {
+            const relativeRunFile = path.resolve(process.cwd(), runFile).replaceAll('\\', '/');
+            lua.mountFile(relativeRunFile, await fs.promises.readFile(relativeRunFile));
+
+            await lua.doFile(relativeRunFile);
+            console.log(lua.global.indexToString(-1));
+        }
+
+        if (!interactive && runFile) {
+            return;
+        }
+
+        if (interactive) {
+            // Call directly from module to bypass the result verification
+            const loadcode = (code) => !lua.global.setTop(0) && luamodule.luaL_loadstring(lua.global.address, code) === LuaReturn.Ok;
+
+            const version = require('../package.json').version;
+            console.log('Welcome to Wasmoon v' + version);
+
+            const rl = readline.createInterface({
+                input: process.stdin,
+                output: process.stdout,
+                terminal: true,
+                removeHistoryDuplicates: true,
+            });
 
             rl.prompt();
+
+            for await (const line of rl) {
+                const loaded = loadcode(line) || loadcode(`return ${line}`);
+                if (!loaded) {
+                    console.log(lua.global.getValue(-1, { type: LuaType.String }));
+                    rl.prompt();
+                    continue;
+                }
+
+                const result = luamodule.lua_pcall(lua.global.address, 0, 1, 0, 0, null);
+                if (result === LuaReturn.Ok) {
+                    const top = lua.global.getTop();
+                    const returnValues = Array.from({ length: top }).map((_, i) => lua.global.indexToString(i + 1));
+
+                    if (returnValues.length) {
+                        console.log(...returnValues);
+                    }
+                } else {
+                    console.log(lua.global.getValue(-1, LuaType.String));
+                }
+
+                rl.prompt();
+            }
+        } else {
+            await lua.doString(fs.readFileSync(0, 'utf-8'));
+            console.log(lua.global.indexToString(-1));
         }
-    } else {
-        await lua.doString(fs.readFileSync(0, 'utf-8'));
-        console.log(lua.global.indexToString(-1));
+    } finally {
+        lua.global.close();
     }
 }
 

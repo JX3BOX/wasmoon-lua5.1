@@ -1,3 +1,16 @@
+# Wasmoon Lua 5.1
+
+构建、发布与类型使用以 [README](README.md#build-and-staged-publishing) 为准。
+产物现在包含 CommonJS、ESM 和完整声明文件；通过包入口导入类型即可：
+
+```ts
+import { Lua, type LuaCreateOptions } from 'wasmoon-lua5.1';
+```
+
+不再注入全局类型，也不需要调用方引用仓库的 `types/` 或开启 `skipLibCheck`。
+`publish.yml` 使用 GitHub OIDC 执行 `npm stage publish`，仅暂存包，等待维护者在
+npm 审批。旧 UMD script 标签产物由 ESM 入口替代，浏览器项目通过打包工具导入。
+
 ### 关于数据交互
 
 关于js的object与lua的table交互的问题，1.18.0以前的方案是做一次性的转换，如

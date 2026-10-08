@@ -1,3 +1,4 @@
+// 提供 Lua VM 初始化、文件挂载及同步和异步执行入口。
 import { FuncManager } from './func-manager';
 import { JsType } from './js-type-bind';
 import { PointerSize } from './definitions';
@@ -6,6 +7,7 @@ import LuaApi from './api';
 import LuaGlobal from './global';
 import LuaThread from './thread';
 import getContextProxy from './context';
+import type { LuaContext, LuaCreateOptions } from './types';
 
 export default class Lua {
     // 静态方法 初始化一个Lua实例
@@ -97,6 +99,55 @@ export default class Lua {
     public doString(script: string): Promise<any> {
         const result = this.callByteCode((thread) => thread.loadString(script));
         return result;
+    }
+
+    /** Bind an asynchronous JS operation for calls from doString/doFile.
+     * The Lua wrapper yields after the native JS callback has returned, so no
+     * Lua 5.1 C call frame is suspended. Native pcall/require remain non-yieldable.
+     */
+    public bindAsync<Args extends unknown[]>(name: string, callback: (...args: Args) => unknown): void {
+        const begin = (...args: Args): [Promise<void>, () => unknown] => {
+            let result: unknown;
+            let failure: unknown;
+            let rejected = false;
+            const ready = Promise.resolve()
+                .then(() => callback(...args))
+                .then(
+                    (value) => {
+                        result = value;
+                    },
+                    (error) => {
+                        rejected = true;
+                        failure = error;
+                    },
+                );
+            // Deliver rejection inside Lua after resume, allowing Lua error handlers.
+            return [
+                ready,
+                () => {
+                    if (rejected) {
+                        throw failure instanceof Error ? failure : new Error(String(failure));
+                    }
+                    return result;
+                },
+            ];
+        };
+        const top = this.global.getTop();
+        try {
+            this.global.loadString(`
+                local name, begin = ...
+                _G[name] = function(...)
+                    local request = begin(...)
+                    coroutine.yield(request[0])
+                    return request[1]()
+                end
+            `);
+            this.global.pushValue(name);
+            this.global.pushValue(begin);
+            this.global.runSync(2);
+        } finally {
+            this.global.setTop(top);
+        }
     }
 
     public doFile(filename: string): Promise<any> {

@@ -1,5 +1,6 @@
 #!/bin/bash -e
-cd $(dirname $0)
+# 编译 Lua 5.1 WASM 与模块化 JS 胶水；CI 固定 Emscripten 6.0.11。
+cd "$(dirname "$0")"
 mkdir -p build
 
 LUA_SRC=$(ls ./lua/src/*.c | grep -v "luac.c" | grep -v "lua.c" | tr "\n" " ")
@@ -22,6 +23,7 @@ emcc \
         'addFunction', \
         'removeFunction', \
         'FS', \
+        'HEAPU32', \
         'ENV', \
         'getValue', \
         'setValue', \
@@ -41,8 +43,6 @@ emcc \
     -s ALLOW_MEMORY_GROWTH=1 \
     -s STRICT=1 \
     -s EXPORT_ES6=1 \
-    -s NODEJS_CATCH_EXIT=0 \
-    -s NODEJS_CATCH_REJECTION=0 \
     -s MALLOC=emmalloc \
     -s STACK_SIZE=4MB \
     -s EXPORTED_FUNCTIONS="[

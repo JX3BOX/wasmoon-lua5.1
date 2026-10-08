@@ -1,5 +1,7 @@
+// 封装 Lua C API 与 Emscripten 运行时，管理 JS 引用和参数转换。
 import { LUA_GLOBALSINDEX, LUA_REGISTRYINDEX, LuaReturn, LuaType } from './definitions';
 import initWasmModule from '../build/liblua5.1.js';
+import type { CType, CValue, EnvironmentVariables, LuaEmscriptenModule, LuaState, ReferenceMetadata } from './types';
 
 export default class LuaApi {
     public static async initialize(customWasmFileLocation?: string, environmentVariables?: EnvironmentVariables): Promise<LuaApi> {
@@ -183,7 +185,8 @@ export default class LuaApi {
 
         this.luaL_loadbuffer = this.cwrap('luaL_loadbuffer', 'number', ['number', 'string|number', 'number', 'string|number']);
         this.luaL_loadfile = this.cwrap('luaL_loadfile', 'number', ['number', 'string']);
-        this.luaL_loadfilex = this.luaL_loadfile;
+        // Lua 5.1 has no mode argument; forwarding it trips modern Emscripten's arity check.
+        this.luaL_loadfilex = (state, filename) => this.luaL_loadfile(state, filename);
         this.luaL_loadstring = this.cwrap('luaL_loadstring', 'number', ['number', 'string']);
 
         this.luaL_buffinit = this.cwrap('luaL_buffinit', null, ['number', 'number']);
@@ -419,34 +422,30 @@ export default class LuaApi {
         }
     }
 
-    private cwrap(
-        name: string,
-        returnType: Emscripten.JSType | null,
-        argTypes: Array<Emscripten.JSType | 'string|number'>,
-    ): (...args: any[]) => any {
+    private cwrap(name: string, returnType: CType | null, argTypes: Array<CType | 'string|number'>): (...args: any[]) => any {
         // optimization for common case
         const commonType = ['number', 'string', 'array', 'boolean'];
         const isCommonCase = argTypes.every((argType) => commonType.includes(argType as string));
         // 没有自定义类型的直接返回函数，少一层函数调用
         if (isCommonCase) {
             return (...args: any[]) => {
-                return this.module.ccall(name, returnType, argTypes as Emscripten.JSType[], args as Emscripten.TypeCompatibleWithC[]);
+                return this.module.ccall(name, returnType, argTypes as CType[], args as CValue[]);
             };
         }
         // 有自定义类型的，需要处理一下
         return (...args: any[]) => {
             const pointersToBeFreed: number[] = [];
             // allow extra arguments
-            const resolvedArgTypes: Emscripten.JSType[] = [];
-            const resolvedArgs: Emscripten.TypeCompatibleWithC[] = [];
+            const resolvedArgTypes: CType[] = [];
+            const resolvedArgs: CValue[] = [];
             argTypes.forEach((argType, i) => {
                 if (commonType.includes(argType)) {
-                    resolvedArgTypes.push(argType as Emscripten.JSType);
-                    resolvedArgs.push(args[i] as Emscripten.TypeCompatibleWithC);
+                    resolvedArgTypes.push(argType as CType);
+                    resolvedArgs.push(args[i] as CValue);
                 } else if (argType === 'string|number') {
                     if (typeof args[i] === 'number') {
                         resolvedArgTypes.push('number');
-                        resolvedArgs.push(args[i] as Emscripten.TypeCompatibleWithC);
+                        resolvedArgs.push(args[i] as CValue);
                     } else {
                         // because it will be freed later, this can only be used on functions that lua internally copies the string
                         if (args[i]?.length > 1024) {
@@ -456,7 +455,7 @@ export default class LuaApi {
                             pointersToBeFreed.push(bufferPointer);
                         } else {
                             resolvedArgTypes.push('string');
-                            resolvedArgs.push(args[i] as Emscripten.TypeCompatibleWithC);
+                            resolvedArgs.push(args[i] as CValue);
                         }
                     }
                 }

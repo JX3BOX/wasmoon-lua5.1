@@ -2,24 +2,26 @@
     "compilerOptions": {
         "baseUrl": ".",
         "incremental": false,
-        "moduleResolution": "node",
+        "moduleResolution": "bundler",
         "inlineSources": false,
         "removeComments": true,
         "sourceMap": false,
         "target": "ES2018",
-        "skipLibCheck": true,
+        "skipLibCheck": false,
         "lib": ["ESNEXT", "DOM"],
         "importHelpers": true,
         "strict": true,
         "resolveJsonModule": true,
-
         "forceConsistentCasingInFileNames": true,
         "noImplicitReturns": true,
         "noImplicitThis": true,
         "noImplicitAny": true,
         "noUnusedParameters": true,
-        "noUnusedLocals": true
+        "noUnusedLocals": true,
+        "module": "ESNext",
+        "esModuleInterop": true,
+        "types": ["node"]
     },
-    "include": ["src/**/*", "bench/**/*", "test/**/*", "types/**/*.d.ts"],
+    "include": ["src/**/*", "bench/**/*", "test/**/*"],
     "exclude": ["node_modules"]
 }

@@ -190,19 +190,20 @@ describe('Engine', () => {
     it('scheduled lua calls should succeed', async () => {
         const lua = await Lua.create();
         lua.ctx.setInterval = setIntervalSafe;
+        const completed = new Promise((resolve) => {
+            lua.ctx.completed = resolve;
+        });
 
         await lua.doString(`
             test = ""
             setInterval(function()
                 test = test .. "i"
+                if #test == 4 then completed() end
             end, 1)
         `);
-        await setTimeout(20);
-
-        const test = lua.ctx.test;
-        expect(test).length.above(3);
-        expect(test).length.below(21);
-        expect(test).to.be.equal(''.padEnd(test.length, 'i'));
+        // 等待实际回调次数；繁忙 CI 上 20ms 内不保证调度出四次定时器。
+        await completed;
+        expect(lua.ctx.test).to.equal('iiii');
     });
 
     it('scheduled lua calls should fail silently if invalid', async () => {

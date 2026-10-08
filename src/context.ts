@@ -1,4 +1,6 @@
+// 提供 Lua 全局环境的 JS 属性访问代理。
 import LuaGlobal from './global';
+import type { LuaContext } from './types';
 
 const getContextProxy = (global: LuaGlobal): LuaContext => {
     return new Proxy(global, {

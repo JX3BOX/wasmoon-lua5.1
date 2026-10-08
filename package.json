@@ -1,6 +1,6 @@
 {
     "name": "wasmoon-lua5.1",
-    "version": "1.18.10",
+    "version": "1.18.11",
     "description": "A real lua 5.1 VM with JS bindings made with webassembly",
     "main": "dist/index.js",
     "scripts": {
@@ -8,13 +8,14 @@
         "build:wasm": "./build.sh",
         "build:wasm:docker:dev": "docker run --rm -v $(pwd):/wasmoon emscripten/emsdk /wasmoon/build.sh dev",
         "build:wasm:docker": "docker run --rm -v $(pwd):/wasmoon emscripten/emsdk /wasmoon/build.sh",
-        "start": "rollup -c -w",
+        "start": "tsdown --watch",
         "test": "mocha --parallel --require ./test/boot.js test/*.test.js",
-        "luatests": "node --experimental-import-meta-resolve test/luatests.mjs",
-        "build": "rollup -c",
-        "clean": "rm -rf dist build",
+        "build": "tsdown",
+        "clean": "node -e \"require('node:fs').rmSync('dist', {recursive:true,force:true})\"",
         "lint": "prettier --write . && eslint . --fix --cache",
-        "lint:nofix": "eslint ."
+        "lint:nofix": "eslint .",
+        "typecheck": "tsc --noEmit",
+        "test:package": "node scripts/test-package.mjs"
     },
     "files": [
         "bin/*",
@@ -25,14 +26,14 @@
     },
     "repository": {
         "type": "git",
-        "url": "git+https://github.com/X3ZvaWQ/wasmoon-lua5.1.git"
+        "url": "git+https://github.com/JX3BOX/wasmoon-lua5.1.git"
     },
     "author": "x3zvawq",
     "license": "MIT",
     "bugs": {
-        "url": "https://github.com/X3ZvaWQ/wasmoon-lua5.1/issues"
+        "url": "https://github.com/JX3BOX/wasmoon-lua5.1/issues"
     },
-    "homepage": "https://github.com/X3ZvaWQ/wasmoon-lua5.1#readme",
+    "homepage": "https://github.com/JX3BOX/wasmoon-lua5.1#readme",
     "keywords": [
         "lua",
         "lua5.1",
@@ -41,10 +42,8 @@
         "webassembly"
     ],
     "devDependencies": {
-        "@rollup/plugin-json": "^6.1.0",
-        "@rollup/plugin-typescript": "^11.1.6",
         "@types/lodash": "^4.14.202",
-        "@types/node": "20.10.4",
+        "@types/node": "24.19.1",
         "@typescript-eslint/eslint-plugin": "6.13.2",
         "@typescript-eslint/parser": "6.13.2",
         "chai": "4.3.10",
@@ -57,15 +56,26 @@
         "jest-mock": "29.7.0",
         "mocha": "10.2.0",
         "prettier": "3.1.0",
-        "rollup": "4.10.0",
-        "rollup-plugin-copy": "3.5.0",
-        "rollup-plugin-dts": "^6.1.0",
-        "rollup-plugin-polyfill-node": "^0.13.0",
-        "tslib": "2.6.2",
-        "typescript": "^5.3.3"
+        "tsdown": "0.23.0",
+        "typescript": "5.9.3"
     },
     "dependencies": {
-        "@types/emscripten": "^1.39.10",
         "lodash": "^4.17.21"
+    },
+    "module": "dist/index.mjs",
+    "types": "dist/index.d.ts",
+    "exports": {
+        ".": {
+            "import": {
+                "types": "./dist/index.d.mts",
+                "default": "./dist/index.mjs"
+            },
+            "require": {
+                "types": "./dist/index.d.ts",
+                "default": "./dist/index.js"
+            }
+        },
+        "./dist/liblua5.1.wasm": "./dist/liblua5.1.wasm",
+        "./package.json": "./package.json"
     }
 }

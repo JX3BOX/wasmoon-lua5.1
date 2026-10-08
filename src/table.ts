@@ -1,6 +1,6 @@
+// 管理 Lua 表代理、引用生命周期和脱离 VM 的数据转换。
 import { DictType, mapTransform } from './utils/map-transform';
 import { LUA_REGISTRYINDEX, LuaType } from './definitions';
-import { inspect } from 'util';
 import LuaThread from './thread';
 
 export class LuaTable {
@@ -18,7 +18,7 @@ export class LuaTable {
         this.pointer = pointer;
     }
 
-    [inspect.custom](): string {
+    [Symbol.for('nodejs.util.inspect.custom')](): string {
         return this.toString();
     }
 
@@ -41,12 +41,15 @@ export class LuaTable {
         return this.ref;
     }
 
-    public $detach(dictType?: DictType): Map<any, any> {
+    public $detach(dictType?: DictType.Map): Map<any, any>;
+    public $detach(dictType: DictType.Object): Record<string, any>;
+    public $detach(dictType: DictType.Array): any[];
+    public $detach(dictType: DictType): Map<any, any> | Record<string, any> | any[];
+    public $detach(dictType?: DictType): Map<any, any> | Record<string, any> | any[] {
         this.thread.luaApi.lua_rawgeti(this.thread.address, LUA_REGISTRYINDEX, this.ref);
-        let map = this.detachTable(-1);
+        const map = this.detachTable(-1);
         this.thread.pop();
-        map = mapTransform(map, { dictType: dictType ?? DictType.Map }) as Map<any, any>;
-        return map;
+        return mapTransform(map, { dictType: dictType ?? DictType.Map });
     }
 
     public $isAlive(): boolean {
@@ -114,8 +117,8 @@ export const getTable = (thread: LuaThread, index: number): LuaTable => {
     }
 
     // 在lua中创建一个引用
+    thread.luaApi.lua_pushvalue(thread.address, index);
     const ref = thread.luaApi.luaL_ref(thread.address, LUA_REGISTRYINDEX);
-    thread.luaApi.lua_rawgeti(thread.address, LUA_REGISTRYINDEX, ref);
 
     const table = new LuaTable(thread, ref, pointer);
     const { proxy, revoke } = Proxy.revocable(table, {

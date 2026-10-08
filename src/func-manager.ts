@@ -1,6 +1,8 @@
+// 注册 JS 回调与元方法，维护 Lua 和 JS 之间的函数引用。
 import { LuaReturn, LuaType } from './definitions';
 import LuaApi from './api';
 import LuaThread from './thread';
+import type { LuaState } from './types';
 
 export class FuncManager {
     public readonly luaApi: LuaApi;

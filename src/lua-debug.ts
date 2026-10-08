@@ -1,4 +1,6 @@
+// 读取 Lua 调试结构，用于生成调用堆栈。
 import { LUA_IDSIZE } from './definitions';
+import type { LuaEmscriptenModule } from './types';
 
 interface LuaDebugTraceback {
     event: number;
