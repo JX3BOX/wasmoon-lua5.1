@@ -36,15 +36,18 @@ export class FuncManager {
             // 删掉indexMap中的引用
             const pointer = callThread.luaApi.lua_topointer(L, 1);
             const functionPointer = this.pointerRedirect.get(pointer);
-            this.removeIndexRedirect(functionPointer as number);
+            if (functionPointer !== undefined) {
+                this.pointerRedirect.delete(pointer);
+                this.removeIndexRedirect(functionPointer);
+            }
             // unref掉js方面的引用
-            const ref = callThread.luaApi.module.getValue(userdata, '*');
-            thread.luaApi.unref(ref);
+            if (userdata) {
+                const ref = callThread.luaApi.module.getValue(userdata, '*');
+                thread.luaApi.unref(ref);
+            }
             // 需要remove掉单独因为该对象添加进wasm的方法
-            callThread.luaApi.lua_getmetatable(L, 1);
-            if (callThread.luaApi.lua_type(L, -1) === LuaType.Nil) {
-                // 没有metatable，直接返回
-                callThread.luaApi.lua_pop(L, 1);
+            // Lua 5.1 中 lua_getmetatable 返回 0 时不会向栈顶压入任何值。
+            if (callThread.luaApi.lua_getmetatable(L, 1) === 0) {
                 return LuaReturn.Ok;
             }
             callThread.luaApi.lua_getfield(L, -1, '__func_pointers');
@@ -60,6 +63,7 @@ export class FuncManager {
                 callThread.luaApi.module.removeFunction(funcPointer);
                 callThread.luaApi.lua_pop(L, 1);
             }
+            callThread.luaApi.lua_pop(L, 2);
             return LuaReturn.Ok;
         }, 'ii');
         this.gc = pointer;
@@ -160,6 +164,12 @@ export class FuncManager {
 
             // 没有找到重定向的target，直接从userdata对应的对象身上找
             const userdata = callThread.luaApi.lua_touserdata(L, 1);
+            if (!userdata) {
+                const typename = callThread.luaApi.luaL_typename(L, 1);
+                callThread.pushValue(`attempt to index a ${typename} value`);
+                callThread.luaApi.lua_error(L);
+                return 0;
+            }
             const ref = callThread.luaApi.module.getValue(userdata, '*');
             const tar = thread.luaApi.getRef(ref);
             const value = tar?.[key];
@@ -192,8 +202,17 @@ export class FuncManager {
 
             // 没有找到重定向的target，直接从userdata对应的对象身上设置
             const userdata = callThread.luaApi.lua_touserdata(L, 1);
+            if (!userdata) {
+                const typename = callThread.luaApi.luaL_typename(L, 1);
+                callThread.pushValue(`attempt to index a ${typename} value`);
+                callThread.luaApi.lua_error(L);
+                return 0;
+            }
             const ref = callThread.luaApi.module.getValue(userdata, '*');
-            thread.luaApi.getRef(ref)[key] = value;
+            const tar = thread.luaApi.getRef(ref);
+            if (tar !== undefined && tar !== null) {
+                tar[key] = value;
+            }
             return LuaReturn.Ok;
         }, 'ii');
         this.new_index = pointer;
@@ -219,10 +238,15 @@ export class FuncManager {
                 return 1;
             }
 
-            // 没有找到重定向的target，直接从userdata对应的对象身上找
+            // Lua 5.1 中函数共享同一个类型元表，普通 Lua 函数无 userdata，按原生格式输出。
             const userdata = callThread.luaApi.lua_touserdata(L, 1);
+            if (!userdata) {
+                callThread.pushValue(`${typename}: 0x${pointer.toString(16)}`);
+                return 1;
+            }
             const ref = callThread.luaApi.module.getValue(userdata, '*');
-            const value = thread.luaApi.getRef(ref).toString();
+            const targetObj = thread.luaApi.getRef(ref);
+            const value = targetObj === undefined || targetObj === null ? String(targetObj) : targetObj.toString();
             callThread.pushValue(`${typename}: 0x${pointer.toString(16)} -> ${value}`);
             return 1;
         }, 'ii');

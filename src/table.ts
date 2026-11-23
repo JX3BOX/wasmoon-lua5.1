@@ -46,10 +46,14 @@ export class LuaTable {
     public $detach(dictType: DictType.Array): any[];
     public $detach(dictType: DictType): Map<any, any> | Record<string, any> | any[];
     public $detach(dictType?: DictType): Map<any, any> | Record<string, any> | any[] {
-        this.thread.luaApi.lua_rawgeti(this.thread.address, LUA_REGISTRYINDEX, this.ref);
-        const map = this.detachTable(-1);
-        this.thread.pop();
-        return mapTransform(map, { dictType: dictType ?? DictType.Map });
+        const top = this.thread.getTop();
+        try {
+            this.thread.luaApi.lua_rawgeti(this.thread.address, LUA_REGISTRYINDEX, this.ref);
+            const map = this.detachTable(-1);
+            return mapTransform(map, { dictType: dictType ?? DictType.Map });
+        } finally {
+            this.thread.setTop(top);
+        }
     }
 
     public $isAlive(): boolean {
@@ -57,6 +61,9 @@ export class LuaTable {
     }
 
     public $destroy(): void {
+        if (!this.alive) {
+            return;
+        }
         this.thread.luaApi.luaL_unref(this.thread.address, LUA_REGISTRYINDEX, this.ref);
         this.thread.luaApi.pointerRefs.delete(this.pointer);
         this.alive = false;
@@ -67,23 +74,28 @@ export class LuaTable {
     }
 
     private getTableValue(key: any): any {
-        this.thread.luaApi.lua_rawgeti(this.thread.address, LUA_REGISTRYINDEX, this.ref);
-        this.thread.pushValue(key);
-        this.thread.luaApi.lua_gettable(this.thread.address, -2);
-        const result = this.thread.getValue(-1);
-        this.thread.pop(2);
-        return result;
+        const top = this.thread.getTop();
+        try {
+            this.thread.luaApi.lua_rawgeti(this.thread.address, LUA_REGISTRYINDEX, this.ref);
+            this.thread.pushValue(key);
+            this.thread.luaApi.lua_gettable(this.thread.address, -2);
+            return this.thread.getValue(-1);
+        } finally {
+            this.thread.setTop(top);
+        }
     }
 
     private setTableValue(key: any, value: any): boolean {
-        this.thread.luaApi.lua_rawgeti(this.thread.address, LUA_REGISTRYINDEX, this.ref);
-        this.thread.pushValue(key);
-        key = this.thread.getValue(-1);
-        this.thread.pushValue(value);
-        value = this.thread.getValue(-1);
-        this.thread.luaApi.lua_settable(this.thread.address, -3);
-        this.thread.pop(1);
-        return true;
+        const top = this.thread.getTop();
+        try {
+            this.thread.luaApi.lua_rawgeti(this.thread.address, LUA_REGISTRYINDEX, this.ref);
+            this.thread.pushValue(key);
+            this.thread.pushValue(value);
+            this.thread.luaApi.lua_settable(this.thread.address, -3);
+            return true;
+        } finally {
+            this.thread.setTop(top);
+        }
     }
 
     private detachTable(index: number, refs?: Map<number, any>): Map<any, any> {
@@ -109,28 +121,44 @@ export class LuaTable {
     }
 }
 
+const TABLE_METHODS = new Set<string | symbol>([
+    '$get',
+    '$set',
+    '$istable',
+    '$getRef',
+    '$detach',
+    '$isAlive',
+    '$destroy',
+    'toString',
+    Symbol.for('nodejs.util.inspect.custom'),
+]);
+
+const DESTROYED_ALLOWED_KEYS = new Set<string | symbol>(['toString', '$isAlive', '$destroy', Symbol.for('nodejs.util.inspect.custom')]);
+
 export const getTable = (thread: LuaThread, index: number): LuaTable => {
     // 根据内存地址，判断是否已经get过，如果有直接从引用表中返回
     const pointer = thread.luaApi.lua_topointer(thread.address, index);
-    if (thread.luaApi.pointerRefs.has(pointer)) {
-        return thread.luaApi.pointerRefs.get(pointer).proxy;
+    const cached = thread.luaApi.pointerRefs.get(pointer);
+    if (cached && typeof cached === 'object' && cached.proxy) {
+        return cached.proxy;
     }
 
     // 在lua中创建一个引用
     thread.luaApi.lua_pushvalue(thread.address, index);
     const ref = thread.luaApi.luaL_ref(thread.address, LUA_REGISTRYINDEX);
 
-    const table = new LuaTable(thread, ref, pointer);
+    // 绑定到主状态而非临时协程，避免协程回收后访问悬空 lua_State*。
+    const table = new LuaTable(thread.getRootThread(), ref, pointer);
     const { proxy, revoke } = Proxy.revocable(table, {
         get: (target, key) => {
-            if (!target.$isAlive() && key !== 'toString') {
+            if (!target.$isAlive() && !DESTROYED_ALLOWED_KEYS.has(key)) {
                 throw new Error(`${target.toString()} is destroyed`);
             }
-            if (target[key]) {
+            if (TABLE_METHODS.has(key)) {
                 return target[key].bind(target);
             }
             if (key === Symbol.toStringTag) {
-                return () => 'LuaTable';
+                return 'LuaTable';
             }
             if (typeof key === 'symbol') {
                 return undefined;

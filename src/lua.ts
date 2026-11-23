@@ -1,7 +1,7 @@
 // 提供 Lua VM 初始化、文件挂载及同步和异步执行入口。
 import { FuncManager } from './func-manager';
 import { JsType } from './js-type-bind';
-import { PointerSize } from './definitions';
+import { LUA_REGISTRYINDEX, PointerSize } from './definitions';
 import { version } from '../package.json';
 import LuaApi from './api';
 import LuaGlobal from './global';
@@ -155,15 +155,25 @@ export default class Lua {
     }
 
     public doStringSync(script: string): any {
-        this.global.loadString(script);
-        const result = this.global.runSync();
-        return result[0];
+        const top = this.global.getTop();
+        try {
+            this.global.loadString(script);
+            const result = this.global.runSync();
+            return result[0];
+        } finally {
+            this.global.setTop(top);
+        }
     }
 
     public doFileSync(filename: string): any {
-        this.global.loadFile(filename);
-        const result = this.global.runSync();
-        return result[0];
+        const top = this.global.getTop();
+        try {
+            this.global.loadFile(filename);
+            const result = this.global.runSync();
+            return result[0];
+        } finally {
+            this.global.setTop(top);
+        }
     }
 
     private initTypeBindings(): void {
@@ -184,13 +194,14 @@ export default class Lua {
                 this.funcManager.addIndexRedirect(pointer, target);
 
                 // proxy for function, avoid `attempt to index global 'TestFunction' (a function value)`
-                thread.luaApi.lua_createtable(thread.address, 0, 0);
-                thread.luaApi.lua_pushcfunction(thread.address, this.funcManager.registerToStringFunction(this.global));
-                thread.luaApi.lua_setfield(thread.address, -2, '__tostring');
-                thread.luaApi.lua_pushcfunction(thread.address, this.funcManager.registerIndexFunction(this.global));
-                thread.luaApi.lua_setfield(thread.address, -2, '__index');
-                thread.luaApi.lua_pushcfunction(thread.address, this.funcManager.registerNewIndexFunction(this.global));
-                thread.luaApi.lua_setfield(thread.address, -2, '__newindex');
+                if (thread.luaApi.luaL_newmetatable(thread.address, 'js-function-meta')) {
+                    thread.luaApi.lua_pushcfunction(thread.address, this.funcManager.registerToStringFunction(this.global));
+                    thread.luaApi.lua_setfield(thread.address, -2, '__tostring');
+                    thread.luaApi.lua_pushcfunction(thread.address, this.funcManager.registerIndexFunction(this.global));
+                    thread.luaApi.lua_setfield(thread.address, -2, '__index');
+                    thread.luaApi.lua_pushcfunction(thread.address, this.funcManager.registerNewIndexFunction(this.global));
+                    thread.luaApi.lua_setfield(thread.address, -2, '__newindex');
+                }
 
                 thread.luaApi.lua_setmetatable(thread.address, -2);
             })
@@ -209,24 +220,15 @@ export default class Lua {
     // WARNING: It will not wait for open handles and can potentially cause bugs if JS code tries to reference Lua after executed
     private async callByteCode(loader: (thread: LuaThread) => void): Promise<any> {
         const thread = this.global.newThread();
-        const threadIndex = this.global.getTop();
+        // 用注册表固定临时协程并立即出栈，避免返回值占栈和并发异步调用的栈索引错位。
+        const threadRef = this.luaApi.luaL_ref(this.global.address, LUA_REGISTRYINDEX);
         try {
             loader(thread);
             const result = await thread.run(0);
-            if (result.length > 0) {
-                // Move all stack results to the global state to avoid referencing the thread values
-                // which will be cleaned up in the finally below.
-                this.luaApi.lua_xmove(thread.address, this.global.address, result.length);
-                // The shenanigans here are to return the first result value on the stack.
-                // Say there's 2 values at stack indexes 1 and 2. Then top is 2, result.length is 2.
-                // That's why there's a + 1 sitting at the end.
-                const ret = this.global.getValue(this.global.getTop() - result.length + 1);
-                return ret;
-            }
-            return undefined;
+            return result[0];
         } finally {
-            // Pop the read on success or failure
-            this.global.remove(threadIndex);
+            thread.close();
+            this.luaApi.luaL_unref(this.global.address, LUA_REGISTRYINDEX, threadRef);
         }
     }
 }

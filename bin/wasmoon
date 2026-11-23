@@ -54,12 +54,21 @@ async function main() {
 
         const interactive = process.stdin.isTTY && (forceInteractive || !runFile);
 
+        const printResult = (value) => {
+            lua.global.pushValue(value);
+            try {
+                console.log(lua.global.indexToString(-1));
+            } finally {
+                lua.global.pop();
+            }
+        };
+
         if (runFile) {
             const relativeRunFile = path.resolve(process.cwd(), runFile).replaceAll('\\', '/');
             lua.mountFile(relativeRunFile, await fs.promises.readFile(relativeRunFile));
 
-            await lua.doFile(relativeRunFile);
-            console.log(lua.global.indexToString(-1));
+            const result = await lua.doFile(relativeRunFile);
+            printResult(result);
         }
 
         if (!interactive && runFile) {
@@ -90,7 +99,7 @@ async function main() {
                     continue;
                 }
 
-                const result = luamodule.lua_pcall(lua.global.address, 0, 1, 0, 0, null);
+                const result = luamodule.lua_pcall(lua.global.address, 0, LUA_MULTRET, 0);
                 if (result === LuaReturn.Ok) {
                     const top = lua.global.getTop();
                     const returnValues = Array.from({ length: top }).map((_, i) => lua.global.indexToString(i + 1));
@@ -99,14 +108,14 @@ async function main() {
                         console.log(...returnValues);
                     }
                 } else {
-                    console.log(lua.global.getValue(-1, LuaType.String));
+                    console.log(lua.global.getValue(-1, { type: LuaType.String }));
                 }
 
                 rl.prompt();
             }
         } else {
-            await lua.doString(fs.readFileSync(0, 'utf-8'));
-            console.log(lua.global.indexToString(-1));
+            const result = await lua.doString(fs.readFileSync(0, 'utf-8'));
+            printResult(result);
         }
     } finally {
         lua.global.close();

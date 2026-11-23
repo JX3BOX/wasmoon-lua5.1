@@ -71,6 +71,7 @@ export default class LuaGlobal extends LuaThread {
 
         if (this.allocatorFunctionPointer) {
             this.luaApi.module.removeFunction(this.allocatorFunctionPointer);
+            this.allocatorFunctionPointer = undefined;
         }
     }
 
@@ -106,9 +107,11 @@ export default class LuaGlobal extends LuaThread {
 
     public get(name: string): any {
         const type = this.luaApi.lua_getglobal(this.address, name);
-        const value = this.getValue(-1, { type });
-        this.pop();
-        return value;
+        try {
+            return this.getValue(-1, { type });
+        } finally {
+            this.pop();
+        }
     }
 
     public set(name: string, value: unknown, options?: PushValueOptions): void {

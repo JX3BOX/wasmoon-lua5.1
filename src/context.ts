@@ -1,4 +1,5 @@
 // 提供 Lua 全局环境的 JS 属性访问代理。
+import { LuaType } from './definitions';
 import LuaGlobal from './global';
 import type { LuaContext } from './types';
 
@@ -22,8 +23,13 @@ const getContextProxy = (global: LuaGlobal): LuaContext => {
             target.set(key, value);
             return true;
         },
-        has: (target: LuaGlobal, key: string) => {
-            return target.get(key) !== undefined;
+        has: (target: LuaGlobal, key: string | symbol) => {
+            if (typeof key === 'symbol') {
+                return false;
+            }
+            const type = target.luaApi.lua_getglobal(target.address, key);
+            target.pop();
+            return type !== LuaType.Nil && type !== LuaType.None;
         },
     });
 };

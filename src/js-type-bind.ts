@@ -168,6 +168,7 @@ export class JsType {
             'pow': '_pow',
             'unm': '_unm',
             '..': '_concat',
+            'concat': '_concat',
             'contact': '_concat',
             '#': '_len',
             'len': '_len',

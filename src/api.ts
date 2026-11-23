@@ -334,12 +334,13 @@ export default class LuaApi {
     // 5.1没有这个
     public luaL_tolstring(L: LuaState, idx: number): string {
         idx = this.lua_absindex(L, idx);
-        let result;
+        let result: string;
         if (this.luaL_callmeta(L, idx, '__tostring')) {
             if (!this.lua_isstring(L, -1)) {
                 this.luaL_error(L, "'__tostring' must return a string");
             }
-            result = this.luaL_tolstring(L, -1);
+            // luaL_callmeta 已将返回值压入栈顶，直接读取并保持恰好 1 个返回值在栈上。
+            return this.lua_tostring(L, -1);
         } else {
             const type = this.lua_type(L, idx);
             if (type === LuaType.Number) {
@@ -351,10 +352,11 @@ export default class LuaApi {
             } else if (type === LuaType.Nil) {
                 result = 'nil';
             } else {
-                const tt = this.luaL_getmetafield(L, idx, '__name'); // try name
-                const kind = tt === LuaType.String ? this.lua_tostring(L, -1) : this.luaL_typename(L, idx);
-                if (tt !== LuaType.Nil) {
-                    this.lua_remove(L, -2); // remove '__name' if pushed
+                // Lua 5.1 中 luaL_getmetafield 返回 0/1，非 0 时将字段压在栈顶 -1。
+                const hasName = Number(this.luaL_getmetafield(L, idx, '__name')) !== 0;
+                const kind = hasName && this.lua_type(L, -1) === LuaType.String ? this.lua_tostring(L, -1) : this.luaL_typename(L, idx);
+                if (hasName) {
+                    this.lua_pop(L, 1);
                 }
                 result = `${kind}: 0x${this.lua_topointer(L, idx).toString(16)}`;
             }
@@ -395,7 +397,7 @@ export default class LuaApi {
         }
         const metadata = this.referenceTracker.get(ref);
         if (metadata === undefined) {
-            this.referenceTracker.delete(ref);
+            this.referenceMap.delete(index);
             this.availableReferences.push(index);
             return;
         }

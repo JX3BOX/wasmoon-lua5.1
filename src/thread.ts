@@ -66,11 +66,8 @@ export default class LuaThread {
         if (target === undefined || target === null) {
             this.luaApi.lua_pushnil(this.address);
         } else if (typeof target === 'number') {
-            if (Number.isInteger(target)) {
-                this.luaApi.lua_pushinteger(this.address, target);
-            } else {
-                this.luaApi.lua_pushnumber(this.address, target);
-            }
+            // Lua 5.1 只有 double 数值类型，lua_pushinteger 在 wasm32 下会截断超过 32 位的整数。
+            this.luaApi.lua_pushnumber(this.address, target);
         } else if (typeof target === 'string') {
             this.luaApi.lua_pushstring(this.address, target);
         } else if (typeof target === 'boolean') {
@@ -139,10 +136,11 @@ export default class LuaThread {
     }
 
     public pushTable(object: Record<string | number, any>, options: PushValueOptions = {}): void {
-        if (!options.refs) {
-            options.refs = new Map();
-        } else {
-            const ref = options.refs.get(object);
+        const isRoot = !options.refs;
+        const refs = options.refs ?? new Map<any, number>();
+        const pushOptions: PushValueOptions = isRoot ? { ...options, refs } : options;
+        if (!isRoot) {
+            const ref = refs.get(object);
             if (ref) {
                 this.luaApi.lua_rawgeti(this.address, LUA_REGISTRYINDEX, ref);
                 return;
@@ -167,26 +165,32 @@ export default class LuaThread {
             recIndexs.push(...Object.keys(object));
         }
 
+        const startTop = this.getTop();
         this.luaApi.lua_createtable(this.address, arrIndexs.length, recIndexs.length);
         // 存一下引用 方便检查 防止循环引用爆栈
         const ref = this.luaApi.luaL_ref(this.address, LUA_REGISTRYINDEX);
         this.luaApi.lua_rawgeti(this.address, LUA_REGISTRYINDEX, ref);
-        options.refs.set(object, ref);
+        refs.set(object, ref);
         try {
             for (const key of arrIndexs) {
-                this.pushValue(key, options);
-                this.pushValue(object[key], options);
+                this.pushValue(key, pushOptions);
+                this.pushValue(object[key], pushOptions);
                 this.luaApi.lua_settable(this.address, -3);
             }
             for (const key of recIndexs) {
-                this.pushValue(key, options);
-                this.pushValue(object[key], options);
+                this.pushValue(key, pushOptions);
+                this.pushValue(object[key], pushOptions);
                 this.luaApi.lua_settable(this.address, -3);
             }
+        } catch (err) {
+            this.setTop(startTop);
+            throw err;
         } finally {
-            const registerRefs = options.refs.values();
-            for (const ref of registerRefs) {
-                this.luaApi.luaL_unref(this.address, LUA_REGISTRYINDEX, ref);
+            // 仅顶层调用统一释放注册表引用，避免嵌套表提前 unref 导致父表循环引用失效或重复释放。
+            if (isRoot) {
+                for (const registeredRef of refs.values()) {
+                    this.luaApi.luaL_unref(this.address, LUA_REGISTRYINDEX, registeredRef);
+                }
             }
         }
     }
@@ -218,26 +222,29 @@ export default class LuaThread {
     }
 
     public getFunction(index: number): (...args: any[]) => any {
+        const pointer = this.luaApi.lua_topointer(this.address, index);
+        const cached = this.luaApi.pointerRefs.get(pointer);
+        if (typeof cached === 'function') {
+            return cached as (...args: any[]) => any;
+        }
+
         this.luaApi.lua_pushvalue(this.address, index);
         const funcRef = this.luaApi.luaL_ref(this.address, LUA_REGISTRYINDEX);
-        const pointer = this.luaApi.lua_topointer(this.address, index);
-
-        if (this.luaApi.pointerRefs.has(pointer)) {
-            return this.luaApi.pointerRefs.get(pointer) as (...args: any[]) => any;
-        }
+        const owner = this.getRootThread();
 
         const func = (...args: any[]): any => {
             if (!func.$isAlive()) {
                 throw new Error('Tried to call a function that has been destroyed');
             }
-            if (this.isClosed()) {
+            if (owner.isClosed()) {
                 console.warn('Tried to call a function after closing lua state');
                 return;
             }
 
-            const thread = this.newThread();
-            thread.luaApi.lua_rawgeti(thread.address, LUA_REGISTRYINDEX, funcRef);
+            const thread = owner.newThread();
+            const threadRef = owner.luaApi.luaL_ref(owner.address, LUA_REGISTRYINDEX);
             try {
+                thread.luaApi.lua_rawgeti(thread.address, LUA_REGISTRYINDEX, funcRef);
                 for (const arg of args) {
                     thread.pushValue(arg);
                 }
@@ -252,16 +259,23 @@ export default class LuaThread {
                 return undefined;
             } finally {
                 thread.close();
-                this.pop();
+                owner.luaApi.luaL_unref(owner.address, LUA_REGISTRYINDEX, threadRef);
             }
         };
         func.$isAlive = () => true;
         func.$destroy = () => {
-            this.luaApi.luaL_unref(this.address, LUA_REGISTRYINDEX, funcRef);
-            this.luaApi.pointerRefs.delete(pointer);
+            if (!func.$isAlive()) {
+                return;
+            }
+            owner.luaApi.luaL_unref(owner.address, LUA_REGISTRYINDEX, funcRef);
+            if (owner.luaApi.pointerRefs.get(pointer) === func) {
+                owner.luaApi.pointerRefs.delete(pointer);
+            }
             func.$isAlive = () => false;
         };
-        this.luaApi.pointerRefs.set(pointer, func);
+        if (!this.luaApi.pointerRefs.has(pointer)) {
+            this.luaApi.pointerRefs.set(pointer, func);
+        }
         return func;
     }
 
@@ -269,8 +283,15 @@ export default class LuaThread {
         return getTable(this, index);
     }
 
+    public getRootThread(): LuaThread {
+        return this.parent || this;
+    }
+
     public stateToThread(L: LuaState): LuaThread {
-        return L === this.parent?.address ? this.parent : new LuaThread(this.luaApi, L, this.parent || this);
+        if (L === this.address) {
+            return this;
+        }
+        return L === this.parent?.address ? this.parent : new LuaThread(this.luaApi, L, this.getRootThread());
     }
 
     public pop(count = 1): void {
@@ -279,34 +300,48 @@ export default class LuaThread {
 
     //============代码执行
     public loadString(luaCode: string, name?: string): void {
+        const startTop = this.getTop();
         const size = this.luaApi.module.lengthBytesUTF8(luaCode);
         const pointerSize = size + 1;
         const bufferPointer = this.luaApi.module._malloc(pointerSize);
         try {
             this.luaApi.module.stringToUTF8(luaCode, bufferPointer, pointerSize);
             this.assertOk(this.luaApi.luaL_loadbuffer(this.address, bufferPointer, size, name ?? bufferPointer));
+        } catch (err) {
+            this.setTop(startTop);
+            throw err;
         } finally {
             this.luaApi.module._free(bufferPointer);
         }
     }
 
     public loadFile(filename: string): void {
-        this.assertOk(this.luaApi.luaL_loadfilex(this.address, filename, null));
+        const startTop = this.getTop();
+        try {
+            this.assertOk(this.luaApi.luaL_loadfilex(this.address, filename, null));
+        } catch (err) {
+            this.setTop(startTop);
+            throw err;
+        }
     }
 
     public call(name: string, ...args: any[]): MultiReturn {
-        const type = this.luaApi.lua_getglobal(this.address, name);
-        if (type !== LuaType.Function) {
-            throw new Error(`A function of type '${type}' was pushed, expected is ${LuaType.Function}`);
-        }
+        const base = this.getTop();
+        try {
+            const type = this.luaApi.lua_getglobal(this.address, name);
+            if (type !== LuaType.Function) {
+                throw new Error(`A function of type '${type}' was pushed, expected is ${LuaType.Function}`);
+            }
 
-        for (const arg of args) {
-            this.pushValue(arg);
-        }
+            for (const arg of args) {
+                this.pushValue(arg);
+            }
 
-        const base = this.getTop() - args.length - 1; // The 1 is for the function to run
-        this.luaApi.lua_call(this.address, args.length, LUA_MULTRET);
-        return this.getStackValues(base);
+            this.luaApi.lua_call(this.address, args.length, LUA_MULTRET);
+            return this.getStackValues(base);
+        } finally {
+            this.setTop(base);
+        }
     }
 
     public getStackValues(start = 0): MultiReturn {
@@ -365,8 +400,12 @@ export default class LuaThread {
 
     public runSync(argCount = 0): MultiReturn {
         const base = this.getTop() - argCount - 1; // The 1 is for the function to run
-        this.assertOk(this.luaApi.lua_pcall(this.address, argCount, LUA_MULTRET, 0) as LuaReturn);
-        return this.getStackValues(base);
+        try {
+            this.assertOk(this.luaApi.lua_pcall(this.address, argCount, LUA_MULTRET, 0) as LuaReturn);
+            return this.getStackValues(base);
+        } finally {
+            this.setTop(base);
+        }
     }
 
     public isClosed(): boolean {
@@ -379,8 +418,11 @@ export default class LuaThread {
         }
 
         if (this.hookFunctionPointer) {
+            this.luaApi.lua_sethook(this.address, null, 0, 0);
             this.luaApi.module.removeFunction(this.hookFunctionPointer);
+            this.hookFunctionPointer = undefined;
         }
+        this.timeout = undefined;
 
         this.closed = true;
     }
@@ -400,9 +442,10 @@ export default class LuaThread {
     // Set to > 0 to enable, otherwise disable.
     public setTimeout(timeout: number | undefined): void {
         if (timeout && timeout > 0) {
+            this.timeout = timeout;
             if (!this.hookFunctionPointer) {
                 this.hookFunctionPointer = this.luaApi.module.addFunction((): void => {
-                    if (Date.now() > timeout) {
+                    if (this.timeout && Date.now() > this.timeout) {
                         this.pushValue(new Error(`thread timeout exceeded`));
                         this.luaApi.lua_error(this.address);
                     }
@@ -410,11 +453,13 @@ export default class LuaThread {
             }
 
             this.luaApi.lua_sethook(this.address, this.hookFunctionPointer, LuaEventMasks.Count, INSTRUCTION_HOOK_COUNT);
-            this.timeout = timeout;
-        } else if (this.hookFunctionPointer) {
-            this.hookFunctionPointer = undefined;
+        } else {
             this.timeout = undefined;
-            this.luaApi.lua_sethook(this.address, null, 0, 0);
+            if (this.hookFunctionPointer) {
+                this.luaApi.lua_sethook(this.address, null, 0, 0);
+                this.luaApi.module.removeFunction(this.hookFunctionPointer);
+                this.hookFunctionPointer = undefined;
+            }
         }
     }
 
